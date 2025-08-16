@@ -4,6 +4,7 @@ require_once 'includes/db.php';
 require_once 'includes/functions.php';
 require_once 'includes/auth.php';
 require_once 'includes/security.php';
+require_once 'includes/FamilyRelationships.php';
 
 // Check if user is logged in
 require_login();
@@ -104,7 +105,6 @@ function addNewRelationship($conn, $data) {
     }
     
     // Get relationship category from FamilyRelationships class
-    require_once 'family-tree.php'; // Load the FamilyRelationships class
     $relationship_category = FamilyRelationships::getRelationshipCategory($relationship_subtype);
     
     // Add the main relationship
@@ -114,8 +114,8 @@ function addNewRelationship($conn, $data) {
     ");
     $stmt->execute([$member_id, $related_member_id, $relationship_category, $relationship_subtype, $marriage_date, $marriage_place]);
     
-    // Add reciprocal relationship if needed
-    $reciprocal = FamilyRelationships::getReciprocalRelationship($relationship_subtype);
+    // Add reciprocal relationship if needed (gender-aware for parent/child)
+    $reciprocal = FamilyRelationships::getReciprocalRelationshipSmart($relationship_subtype, $member_id, $related_member_id, $conn);
     if ($reciprocal) {
         $reciprocal_category = FamilyRelationships::getRelationshipCategory($reciprocal);
         $stmt->execute([$related_member_id, $member_id, $reciprocal_category, $reciprocal, $marriage_date, $marriage_place]);
@@ -169,8 +169,8 @@ function deleteRelationship($conn, $data) {
     $stmt->execute([$relationship_id]);
     
     // Delete reciprocal relationship if it exists
-    require_once 'family-tree.php';
-    $reciprocal = FamilyRelationships::getReciprocalRelationship($relationship['relationship_subtype']);
+    require_once 'includes/FamilyRelationships.php';
+    $reciprocal = FamilyRelationships::getReciprocalRelationshipSmart($relationship['relationship_subtype'], $relationship['person1_id'], $relationship['person2_id'], $conn);
     if ($reciprocal) {
         $stmt = $conn->prepare("
             DELETE FROM relationships 

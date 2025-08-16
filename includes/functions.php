@@ -186,36 +186,40 @@ function buildRelationshipsMap($family_data) {
 
 // Find the root generation (oldest living generation or those without parents)
 function findRootGeneration($members, $relationships_map) {
-    $has_parents = [];
+    $has_parents_set = [];
     $potential_roots = [];
-    
-    // Find members who have parents in the tree
+
+    // Determine who has parents by scanning all edges:
+    // - If someone has an outgoing son/daughter/child edge, that person is the child (has parents)
+    // - If someone has an outgoing father/mother/parent edge, the target member is the child (has parents)
     foreach ($relationships_map as $person_id => $relationships) {
         foreach ($relationships as $rel) {
+            if (in_array($rel['type'], ['son', 'daughter', 'child'])) {
+                $has_parents_set[$person_id] = true; // person_id is the child
+            }
             if (in_array($rel['type'], ['father', 'mother', 'parent'])) {
-                $has_parents[] = $person_id;
+                $has_parents_set[$rel['member_id']] = true; // target has parents
             }
         }
     }
-    
+
     // Root members are those without parents in the tree
     foreach ($members as $member) {
-        if (!in_array($member['id'], $has_parents)) {
+        if (empty($has_parents_set[$member['id']])) {
             $potential_roots[] = $member;
         }
     }
-    
-    // If no clear roots found, find the oldest members
+
+    // If no clear roots found, pick the oldest members
     if (empty($potential_roots)) {
         usort($members, function($a, $b) {
             $dateA = $a['date_of_birth'] ?? '9999-12-31';
             $dateB = $b['date_of_birth'] ?? '9999-12-31';
             return strcmp($dateA, $dateB);
         });
-        
         return array_slice($members, 0, min(4, count($members)));
     }
-    
+
     return $potential_roots;
 }
 
@@ -356,7 +360,8 @@ function findChildren($parent_id, $all_members, $relationships_map) {
     }
     
     foreach ($relationships_map[$parent_id] as $rel) {
-        if (in_array($rel['type'], ['son', 'daughter', 'child'])) {
+        // Parent -> Child relations are marked as father/mother/parent
+        if (in_array($rel['type'], ['father', 'mother', 'parent'])) {
             $child = findMemberById($all_members, $rel['member_id']);
             if ($child) {
                 $children[] = $child;

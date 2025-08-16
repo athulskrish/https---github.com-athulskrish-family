@@ -5,6 +5,7 @@ require_once 'includes/db.php';
 require_once 'includes/functions.php';
 require_once 'includes/auth.php';
 require_once 'includes/security.php';
+require_once 'includes/FamilyRelationships.php';
 
 // Check if user is logged in
 require_login();
@@ -14,6 +15,7 @@ $db = Database::getInstance();
 $conn = $db->getConnection();
 
 // Enhanced FamilyRelationships class with category mapping
+if (!class_exists('FamilyRelationships')) {
 class FamilyRelationships {
     public static $relationships = [
         // Direct Line (Vertical)
@@ -141,6 +143,7 @@ class FamilyRelationships {
         
         return $reciprocals[$relationship] ?? null;
     }
+}
 }
 // Handle photo upload
 function handlePhotoUpload($file) {
@@ -279,8 +282,8 @@ function addRelationship($data, $conn) {
         $marriage_place
     ]);
     
-    // Add reciprocal relationship if needed
-    $reciprocal = FamilyRelationships::getReciprocalRelationship($data['relationship_subtype']);
+    // Add reciprocal relationship if needed (gender-aware so parent is father/mother correctly)
+    $reciprocal = FamilyRelationships::getReciprocalRelationshipSmart($data['relationship_subtype'], $data['person1_id'], $data['person2_id'], $conn);
     if($reciprocal) {
         $reciprocal_category = FamilyRelationships::getRelationshipCategory($reciprocal);
         $stmt->execute([
@@ -291,6 +294,44 @@ function addRelationship($data, $conn) {
             $marriage_date,
             $marriage_place
         ]);
+    }
+
+    // If we added a child -> parent relation (e.g., daughter/son), also auto-link to the other parent (spouse of the given parent)
+    $childSubtypes = ['son','daughter','step-son','step-daughter','adoptive-son','adoptive-daughter'];
+    if (in_array(strtolower($data['relationship_subtype']), $childSubtypes)) {
+        $childId = (int)$data['person1_id'];
+        $parentId = (int)$data['person2_id'];
+
+        // Find spouse(s) of the parent
+        $spouseStmt = $conn->prepare("SELECT person2_id FROM relationships WHERE person1_id = ? AND relationship_subtype IN ('husband','wife')");
+        $spouseStmt->execute([$parentId]);
+        $spouses = $spouseStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if ($spouses) {
+            // Helper to check existence
+            $existsStmt = $conn->prepare("SELECT 1 FROM relationships WHERE person1_id = ? AND person2_id = ? AND relationship_subtype = ? LIMIT 1");
+            foreach ($spouses as $spouseId) {
+                $spouseId = (int)$spouseId;
+                if (!$spouseId || $spouseId === $parentId || $spouseId === $childId) continue;
+
+                // Add child -> other parent (same child subtype)
+                $existsStmt->execute([$childId, $spouseId, strtolower($data['relationship_subtype'])]);
+                if (!$existsStmt->fetchColumn()) {
+                    $cat = FamilyRelationships::getRelationshipCategory(strtolower($data['relationship_subtype']));
+                    $stmt->execute([$childId, $spouseId, $cat, strtolower($data['relationship_subtype']), null, null]);
+                }
+
+                // Add other parent -> child (gender-aware reciprocal)
+                $rec = FamilyRelationships::getReciprocalRelationshipSmart(strtolower($data['relationship_subtype']), $childId, $spouseId, $conn);
+                if ($rec) {
+                    $existsStmt->execute([$spouseId, $childId, $rec]);
+                    if (!$existsStmt->fetchColumn()) {
+                        $rcat = FamilyRelationships::getRelationshipCategory($rec);
+                        $stmt->execute([$spouseId, $childId, $rcat, $rec, null, null]);
+                    }
+                }
+            }
+        }
     }
 }
 

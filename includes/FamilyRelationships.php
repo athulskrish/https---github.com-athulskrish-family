@@ -115,5 +115,67 @@ if (!class_exists('FamilyRelationships')) {
             ];
             return $reciprocals[$relationship] ?? null;
         }
+
+        // Gender-aware reciprocal: decides father/mother or son/daughter based on the other person's gender
+        public static function getReciprocalRelationshipSmart($relationshipSubtype, $person1Id, $person2Id, $conn) {
+            // person1Id has relationship $relationshipSubtype to person2Id
+            // We compute the reciprocal for person2Id -> person1Id
+            $relationshipSubtype = strtolower($relationshipSubtype);
+
+            // Helper to get gender from DB (expects column `gender` with values like 'M' or 'F')
+            $getGender = function($id) use ($conn) {
+                try {
+                    $stmt = $conn->prepare("SELECT gender FROM people WHERE id = ?");
+                    $stmt->execute([$id]);
+                    $g = $stmt->fetchColumn();
+                    return $g ? strtoupper($g) : null;
+                } catch (\Exception $e) {
+                    return null;
+                }
+            };
+
+            // Spouse handling stays symmetric
+            if (in_array($relationshipSubtype, ['husband', 'wife'])) {
+                return $relationshipSubtype === 'husband' ? 'wife' : 'husband';
+            }
+
+            // Child -> Parent mapping (e.g., son/daughter -> father/mother)
+            if (in_array($relationshipSubtype, ['son','daughter','step-son','step-daughter','adoptive-son','adoptive-daughter'])) {
+                $parentGender = $getGender($person2Id);
+                $prefix = '';
+                if (str_starts_with($relationshipSubtype, 'step-')) {
+                    $prefix = 'step-';
+                } elseif (str_starts_with($relationshipSubtype, 'adoptive-')) {
+                    $prefix = 'adoptive-';
+                }
+                if ($parentGender === 'M') {
+                    return $prefix . 'father';
+                } elseif ($parentGender === 'F') {
+                    return $prefix . 'mother';
+                }
+                // Fallback to generic mapping
+                return self::getReciprocalRelationship($relationshipSubtype);
+            }
+
+            // Parent -> Child mapping (e.g., father/mother -> son/daughter)
+            if (in_array($relationshipSubtype, ['father','mother','step-father','step-mother','adoptive-father','adoptive-mother'])) {
+                $childGender = $getGender($person2Id);
+                $prefix = '';
+                if (str_starts_with($relationshipSubtype, 'step-')) {
+                    $prefix = 'step-';
+                } elseif (str_starts_with($relationshipSubtype, 'adoptive-')) {
+                    $prefix = 'adoptive-';
+                }
+                if ($childGender === 'M') {
+                    return $prefix . 'son';
+                } elseif ($childGender === 'F') {
+                    return $prefix . 'daughter';
+                }
+                return self::getReciprocalRelationship($relationshipSubtype);
+            }
+
+            // Default to legacy static mapping
+            return self::getReciprocalRelationship($relationshipSubtype);
+        }
     }
 }
