@@ -18,6 +18,7 @@ require_once dirname(__DIR__) . '/includes/auth.php';
     <link href="<?php echo BASE_URL; ?>assets/css/style.css" rel="stylesheet">
     <link href="<?php echo BASE_URL; ?>assets/css/responsive.css" rel="stylesheet">
     <link href="<?php echo BASE_URL; ?>assets/css/family-tree.css" rel="stylesheet">
+    <link href="<?php echo BASE_URL; ?>assets/css/member-details.css" rel="stylesheet">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">

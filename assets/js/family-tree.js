@@ -160,17 +160,21 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Add click handlers to member cards for future expansion
+    // Add click handlers to member cards
     const memberCards = document.querySelectorAll('.member-card');
     memberCards.forEach(card => {
         card.addEventListener('click', function(e) {
             e.stopPropagation();
             const memberId = this.dataset.memberId;
             if (memberId) {
-                // Future: Show member details modal
-                console.log('Clicked member:', memberId);
+                // Navigate to member details page (using existing member.php)
+                window.location.href = 'member.php?id=' + memberId;
             }
         });
+        
+        // Add hover effect to indicate clickability
+        card.style.cursor = 'pointer';
+        card.title = 'Click to view details';
     });
     
     // Initialize zoom buttons state

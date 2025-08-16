@@ -45,6 +45,7 @@ echo "</pre>";
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="assets/css/family-tree.css">
+    <link rel="stylesheet" href="assets/css/member-details.css">
 </head>
 <body style="background: #f8f9fa; padding: 20px;">
     <div class="container">
