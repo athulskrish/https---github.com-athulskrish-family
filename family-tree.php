@@ -309,23 +309,35 @@ function getFamilyTreeData($tree_id, $conn) {
         $members[$member['id']] = $member;
     }
     
-    // Get all relationships
+    // Get all relationships with both directions
     $query = "SELECT r.*, 
         p1.first_name as person1_first_name, p1.last_name as person1_last_name,
         p2.first_name as person2_first_name, p2.last_name as person2_last_name
         FROM relationships r
         JOIN people p1 ON r.person1_id = p1.id
         JOIN people p2 ON r.person2_id = p2.id
-        WHERE p1.tree_id = ?";
+        WHERE p1.tree_id = ?
+        ORDER BY r.person1_id, r.person2_id";
     
     $stmt = $conn->prepare($query);
     $stmt->execute([$tree_id]);
     $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     foreach($result as $rel) {
-        $rel['person1_name'] = $rel['person1_first_name'] . ' ' . $rel['person1_last_name'];
-        $rel['person2_name'] = $rel['person2_first_name'] . ' ' . $rel['person2_last_name'];
-        $relationships[] = $rel;
+        $rel['person1_name'] = trim($rel['person1_first_name'] . ' ' . $rel['person1_last_name']);
+        $rel['person2_name'] = trim($rel['person2_first_name'] . ' ' . $rel['person2_last_name']);
+        
+        // Convert relationship_subtype to the format expected by our tree builder
+        $relationships[] = [
+            'person1_id' => $rel['person1_id'],
+            'person2_id' => $rel['person2_id'], 
+            'relationship_type' => $rel['relationship_type'],
+            'relationship_subtype' => $rel['relationship_subtype'],
+            'marriage_date' => $rel['marriage_date'],
+            'marriage_place' => $rel['marriage_place'],
+            'person1_name' => $rel['person1_name'],
+            'person2_name' => $rel['person2_name']
+        ];
     }
     
     return ['members' => $members, 'relationships' => $relationships];

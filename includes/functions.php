@@ -116,150 +116,337 @@ function get_relationship_type($relationship_id) {
     return isset($types[$relationship_id]) ? $types[$relationship_id] : 'Unknown';
 }
 
-// Family tree rendering function
+// Improved family tree rendering function
 function renderFamilyTree($family_data) {
     $output = '<div class="family-tree-container">';
     
     if (empty($family_data['members'])) {
         $output .= '<div class="alert alert-info">No family members found. Add your first family member above!</div>';
-        return $output;
+        return $output . '</div>';
     }
     
-    // Build relationships map
-    $relationships = [];
-    if (isset($family_data['relationships']) && is_array($family_data['relationships'])) {
-        foreach ($family_data['relationships'] as $rel) {
-            if (isset($rel['member1_id'], $rel['member2_id'], $rel['relationship_type'])) {
-                if (!isset($relationships[$rel['member1_id']])) {
-                    $relationships[$rel['member1_id']] = [];
-                }
-                $relationships[$rel['member1_id']][] = [
-                    'type' => $rel['relationship_type'],
-                    'member_id' => $rel['member2_id']
-                ];
-            }
-        }
-    }
+    // Build better relationships map
+    $relationships_map = buildRelationshipsMap($family_data);
     
-    // Find root members (those without parents)
-    $members_with_parents = [];
-    foreach ($relationships as $member_id => $rels) {
-        foreach ($rels as $rel) {
-            if (isset($rel['type']) && $rel['type'] === 'child') {
-                $members_with_parents[] = $member_id;
-            }
-        }
-    }
+    // Find root generation (those without living parents in the tree)
+    $root_members = findRootGeneration($family_data['members'], $relationships_map);
     
-    $root_members = array_filter($family_data['members'], function($member) use ($members_with_parents) {
-        return isset($member['id']) && !in_array($member['id'], $members_with_parents);
-    });
-    
-    $output .= '<div class="family-tree">';
-    foreach ($root_members as $root_member) {
-        $output .= renderFamilyUnit($root_member, $family_data, $relationships);
+    if (empty($root_members)) {
+        // If no clear root, just show all members
+        $output .= '<div class="alert alert-warning">Complex family structure detected. Showing all members:</div>';
+        $output .= renderSimpleList($family_data['members']);
+    } else {
+        $output .= '<div class="family-tree">';
+        $output .= renderGenerationLevel($root_members, $family_data, $relationships_map, 0);
+        $output .= '</div>';
     }
-    $output .= '</div>';
     
     // Add zoom controls
     $output .= '<div class="tree-controls">
-        <button onclick="zoomTree(1.1)"><i class="fas fa-search-plus"></i></button>
-        <button onclick="zoomTree(0.9)"><i class="fas fa-search-minus"></i></button>
+        <button onclick="zoomTree(1.1)" title="Zoom In"><i class="fas fa-search-plus"></i></button>
+        <button onclick="zoomTree(0.9)" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
+        <button onclick="resetZoom()" title="Reset Zoom"><i class="fas fa-expand-arrows-alt"></i></button>
     </div>';
     
     $output .= '</div>';
     return $output;
 }
 
-// Helper function to render a family unit
-function renderFamilyUnit($member, $family_data, $relationships) {
-    $output = '<div class="family-unit">';
+// Build comprehensive relationships map
+function buildRelationshipsMap($family_data) {
+    $map = [];
     
-    // Find spouse if exists
-    $spouse = null;
-    if (isset($member['id']) && isset($relationships[$member['id']])) {
-        foreach ($relationships[$member['id']] as $rel) {
-            if (isset($rel['type'], $rel['member_id']) && $rel['type'] === 'spouse') {
-                $spouse = findMemberById($family_data['members'], $rel['member_id']);
-                break;
+    if (!isset($family_data['relationships']) || !is_array($family_data['relationships'])) {
+        return $map;
+    }
+    
+    foreach ($family_data['relationships'] as $rel) {
+        if (!isset($rel['person1_id'], $rel['person2_id'], $rel['relationship_subtype'])) {
+            continue;
+        }
+        
+        $person1 = $rel['person1_id'];
+        $person2 = $rel['person2_id'];
+        $relationship = $rel['relationship_subtype'];
+        
+        if (!isset($map[$person1])) {
+            $map[$person1] = [];
+        }
+        
+        $map[$person1][] = [
+            'type' => $relationship,
+            'member_id' => $person2,
+            'marriage_date' => $rel['marriage_date'] ?? null,
+            'marriage_place' => $rel['marriage_place'] ?? null
+        ];
+    }
+    
+    return $map;
+}
+
+// Find the root generation (oldest living generation or those without parents)
+function findRootGeneration($members, $relationships_map) {
+    $has_parents = [];
+    $potential_roots = [];
+    
+    // Find members who have parents in the tree
+    foreach ($relationships_map as $person_id => $relationships) {
+        foreach ($relationships as $rel) {
+            if (in_array($rel['type'], ['father', 'mother', 'parent'])) {
+                $has_parents[] = $person_id;
             }
         }
     }
     
-    // Render member and spouse
-    $output .= '<div class="spouses">';
-    if (isset($member['id'])) {
-        $output .= renderMemberCard($member);
+    // Root members are those without parents in the tree
+    foreach ($members as $member) {
+        if (!in_array($member['id'], $has_parents)) {
+            $potential_roots[] = $member;
+        }
     }
-    if ($spouse) {
-        $output .= renderMemberCard($spouse);
+    
+    // If no clear roots found, find the oldest members
+    if (empty($potential_roots)) {
+        usort($members, function($a, $b) {
+            $dateA = $a['date_of_birth'] ?? '9999-12-31';
+            $dateB = $b['date_of_birth'] ?? '9999-12-31';
+            return strcmp($dateA, $dateB);
+        });
+        
+        return array_slice($members, 0, min(4, count($members)));
+    }
+    
+    return $potential_roots;
+}
+
+// Render a generation level with all family units
+function renderGenerationLevel($members, $family_data, $relationships_map, $level) {
+    if (empty($members)) {
+        return '';
+    }
+    
+    $generation_names = [
+        0 => 'Root Generation',
+        1 => 'Children',
+        2 => 'Grandchildren',
+        3 => 'Great-Grandchildren',
+        4 => 'Great-Great-Grandchildren'
+    ];
+    
+    $output = '<div class="generation-level" data-level="' . $level . '">';
+    
+    if (isset($generation_names[$level])) {
+        $output .= '<div class="generation-label">' . $generation_names[$level] . '</div>';
+    }
+    
+    // Group members into family units (couples and their children)
+    $family_units = groupIntoFamilyUnits($members, $relationships_map);
+    
+    foreach ($family_units as $unit) {
+        $output .= renderFamilyUnit($unit, $family_data, $relationships_map, $level);
+    }
+    
+    $output .= '</div>';
+    
+    return $output;
+}
+
+// Group members into family units (couples + singles)
+function groupIntoFamilyUnits($members, $relationships_map) {
+    $units = [];
+    $processed = [];
+    
+    foreach ($members as $member) {
+        if (in_array($member['id'], $processed)) {
+            continue;
+        }
+        
+        $unit = ['parents' => [$member]];
+        $processed[] = $member['id'];
+        
+        // Find spouse
+        if (isset($relationships_map[$member['id']])) {
+            foreach ($relationships_map[$member['id']] as $rel) {
+                if (in_array($rel['type'], ['husband', 'wife', 'spouse']) && !in_array($rel['member_id'], $processed)) {
+                    $spouse = findMemberById($members, $rel['member_id']);
+                    if ($spouse) {
+                        $unit['parents'][] = $spouse;
+                        $processed[] = $spouse['id'];
+                        break;
+                    }
+                }
+            }
+        }
+        
+        $units[] = $unit;
+    }
+    
+    return $units;
+}
+
+// Render a single family unit
+function renderFamilyUnit($unit, $family_data, $relationships_map, $level) {
+    $output = '<div class="family-unit">';
+    
+    // Render parents
+    $parent_count = count($unit['parents']);
+    $parent_class = $parent_count > 1 ? '' : 'single';
+    
+    $output .= '<div class="parent-level ' . $parent_class . '">';
+    foreach ($unit['parents'] as $parent) {
+        $output .= renderMemberCard($parent);
     }
     $output .= '</div>';
     
     // Find and render children
-    $children = [];
-    if (isset($member['id']) && isset($relationships[$member['id']])) {
-        foreach ($relationships[$member['id']] as $rel) {
-            if (isset($rel['type'], $rel['member_id']) && $rel['type'] === 'parent') {
-                $child = findMemberById($family_data['members'], $rel['member_id']);
-                if ($child) {
-                    $children[] = $child;
-                }
-            }
+    $all_children = [];
+    foreach ($unit['parents'] as $parent) {
+        $children = findChildren($parent['id'], $family_data['members'], $relationships_map);
+        $all_children = array_merge($all_children, $children);
+    }
+    
+    // Remove duplicates
+    $unique_children = [];
+    $child_ids = [];
+    foreach ($all_children as $child) {
+        if (!in_array($child['id'], $child_ids)) {
+            $unique_children[] = $child;
+            $child_ids[] = $child['id'];
         }
     }
     
-    if (!empty($children)) {
-        $output .= '<div class="children">';
-        foreach ($children as $child) {
-            $output .= renderFamilyUnit($child, $family_data, $relationships);
+    if (!empty($unique_children)) {
+        $output .= '<div class="parent-to-children-line"></div>';
+        $child_class = count($unique_children) == 1 ? 'single-child' : '';
+        
+        $output .= '<div class="children-level ' . $child_class . '">';
+        
+        // Add connection points for each child
+        $child_positions = [];
+        $total_children = count($unique_children);
+        
+        foreach ($unique_children as $index => $child) {
+            $position = ($index / max(1, $total_children - 1)) * 100;
+            $child_positions[] = $position;
+            
+            $output .= '<div class="child-wrapper" style="position: relative;">';
+            $output .= '<div class="child-connection" style="left: 50%; transform: translateX(-50%);"></div>';
+            $output .= renderMemberCard($child);
+            $output .= '</div>';
         }
+        
         $output .= '</div>';
+        
+        // Recursively render next generation
+        if ($level < 4) { // Limit depth to prevent infinite recursion
+            $output .= renderGenerationLevel($unique_children, $family_data, $relationships_map, $level + 1);
+        }
     }
     
     $output .= '</div>';
     return $output;
 }
 
-// Helper function to render a member card
+// Find children of a specific parent
+function findChildren($parent_id, $all_members, $relationships_map) {
+    $children = [];
+    
+    if (!isset($relationships_map[$parent_id])) {
+        return $children;
+    }
+    
+    foreach ($relationships_map[$parent_id] as $rel) {
+        if (in_array($rel['type'], ['son', 'daughter', 'child'])) {
+            $child = findMemberById($all_members, $rel['member_id']);
+            if ($child) {
+                $children[] = $child;
+            }
+        }
+    }
+    
+    return $children;
+}
+
+// Render simple list when tree structure is too complex
+function renderSimpleList($members) {
+    $output = '<div class="simple-member-list">';
+    foreach ($members as $member) {
+        $output .= '<div class="simple-member-item">' . renderMemberCard($member) . '</div>';
+    }
+    $output .= '</div>';
+    return $output;
+}
+
+// Enhanced helper function to render a member card
 function renderMemberCard($member) {
     if (!isset($member['first_name'], $member['last_name'])) {
         return '<div class="member-card"><div class="member-info"><h4>Invalid Member Data</h4></div></div>';
     }
 
     $gender = isset($member['gender']) ? strtolower($member['gender']) : '';
-    $output = '<div class="member-card ' . htmlspecialchars($gender) . '">';
+    $gender_class = $gender === 'm' ? 'male' : ($gender === 'f' ? 'female' : 'other');
+    
+    // Check if deceased
+    $is_deceased = !empty($member['date_of_death']) || (isset($member['is_living']) && !$member['is_living']);
+    $deceased_class = $is_deceased ? ' deceased' : '';
+    
+    $output = '<div class="member-card ' . $gender_class . $deceased_class . '" data-member-id="' . $member['id'] . '">';
+    
+    // Photo section
     $output .= '<div class="member-photo">';
-    if (isset($member['photo_url']) && !empty($member['photo_url'])) {
+    if (isset($member['photo_url']) && !empty($member['photo_url']) && file_exists($member['photo_url'])) {
         $output .= '<img src="' . htmlspecialchars($member['photo_url']) . '" alt="' . htmlspecialchars($member['first_name']) . '">';
     } else {
-        $output .= '<div class="default-photo"><i class="fas fa-user"></i></div>';
+        $icon = $gender === 'f' ? 'fa-female' : ($gender === 'm' ? 'fa-male' : 'fa-user');
+        $output .= '<div class="default-photo"><i class="fas ' . $icon . '"></i></div>';
     }
     $output .= '</div>';
+    
     $output .= '<div class="member-info">';
     
-    // Display name with maiden name for females
-    $display_name = htmlspecialchars($member['first_name'] . ' ' . $member['last_name']);
-    if (isset($member['gender']) && $member['gender'] === 'F' && isset($member['maiden_name']) && !empty($member['maiden_name'])) {
-        $display_name .= ' <small class="text-muted">(née ' . htmlspecialchars($member['maiden_name']) . ')</small>';
+    // Name with maiden name for females
+    $display_name = htmlspecialchars($member['first_name']);
+    if (isset($member['middle_name']) && !empty($member['middle_name'])) {
+        $display_name .= ' ' . htmlspecialchars($member['middle_name']);
     }
-    $output .= '<h4>' . $display_name . '</h4>';
+    $display_name .= ' ' . htmlspecialchars($member['last_name']);
     
-    if (isset($member['date_of_birth']) && !empty($member['date_of_birth'])) {
-        $output .= '<p><i class="fas fa-birthday-cake"></i> ' . htmlspecialchars($member['date_of_birth']);
-        if (isset($member['date_of_death']) && !empty($member['date_of_death'])) {
-            $output .= ' - ' . htmlspecialchars($member['date_of_death']);
-        }
-        $output .= '</p>';
+    if ($gender === 'f' && isset($member['maiden_name']) && !empty($member['maiden_name'])) {
+        $display_name .= '<br><small class="text-muted">(née ' . htmlspecialchars($member['maiden_name']) . ')</small>';
     }
+    
+    $output .= '<div class="member-name">' . $display_name . '</div>';
+    
+    // Dates
+    $dates = '';
+    if (isset($member['date_of_birth']) && !empty($member['date_of_birth'])) {
+        $birth_date = date('Y', strtotime($member['date_of_birth']));
+        $dates = $birth_date;
+        
+        if ($is_deceased && isset($member['date_of_death']) && !empty($member['date_of_death'])) {
+            $death_date = date('Y', strtotime($member['date_of_death']));
+            $dates .= ' - ' . $death_date;
+        } elseif (!$is_deceased) {
+            $dates .= ' - Present';
+        }
+    }
+    
+    if ($dates) {
+        $output .= '<div class="member-dates">(' . $dates . ')</div>';
+    }
+    
+    // Additional info
     if (isset($member['birth_place']) && !empty($member['birth_place'])) {
         $output .= '<p><i class="fas fa-map-marker-alt"></i> ' . htmlspecialchars($member['birth_place']) . '</p>';
     }
+    
     if (isset($member['occupation']) && !empty($member['occupation'])) {
         $output .= '<p><i class="fas fa-briefcase"></i> ' . htmlspecialchars($member['occupation']) . '</p>';
     }
-    $output .= '</div>';
-    $output .= '</div>';
+    
+    $output .= '</div>'; // member-info
+    $output .= '</div>'; // member-card
+    
     return $output;
 }
 
