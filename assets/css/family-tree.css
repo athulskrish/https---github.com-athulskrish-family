@@ -1,4 +1,4 @@
-/* Family Tree Container */
+/* Dynamic Family Tree Container - Enhanced for unlimited generations */
 .family-tree-container {
     min-height: 500px;
     padding: 40px 20px;
@@ -7,6 +7,8 @@
     position: relative;
     border-radius: 15px;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    /* Enable smooth scrolling for large trees */
+    scroll-behavior: smooth;
 }
 
 .family-tree {
@@ -18,59 +20,135 @@
     transition: transform 0.3s ease;
     padding: 20px;
     position: relative;
+    /* Ensure adequate spacing for large trees */
+    min-height: 100%;
 }
 
-/* Generation Level Container */
+/* Enhanced Generation Level - Supports unlimited generations */
 .generation-level {
     display: flex;
     justify-content: center;
     align-items: flex-start;
     flex-wrap: wrap;
-    gap: 60px;
-    margin: 40px 0;
+    gap: 80px; /* Increased gap for better clarity */
+    margin: 60px 0; /* Increased vertical spacing */
     position: relative;
     width: 100%;
+    min-height: 200px; /* Ensure minimum height for connecting lines */
 }
 
 .generation-level:first-child {
     margin-top: 0;
 }
 
-/* Family Unit (Parents + their children) */
+/* Dynamic Generation Labels */
+.generation-label {
+    position: absolute;
+    left: -80px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 25px;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(0, 123, 255, 0.3);
+    z-index: 5;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Family Unit - Enhanced for better organization */
 .family-unit {
     display: flex;
     flex-direction: column;
     align-items: center;
     position: relative;
-    margin: 0 20px;
+    margin: 0 30px; /* Increased horizontal spacing */
+    min-width: 300px; /* Ensure minimum width */
 }
 
-/* Parent Level - Couples/Spouses */
+/* Parent Level - Enhanced for multiple spouses */
 .parent-level {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 10px;
+    gap: 15px; /* Increased gap between spouses */
     position: relative;
-    margin-bottom: 60px;
+    margin-bottom: 80px; /* Increased space for connection lines */
+    flex-wrap: wrap; /* Allow wrapping for many spouses */
 }
 
-/* Marriage/Partnership connection line */
-.parent-level::before {
+/* Marriage Connection - Enhanced styling */
+.parent-level.married-couple::before,
+.marriage-line {
     content: '';
     position: absolute;
     top: 50%;
-    left: calc(50% - 100px);
-    right: calc(50% - 100px);
-    height: 3px;
+    left: calc(50% - 125px); /* Adjusted for larger cards */
+    right: calc(50% - 125px);
+    height: 4px;
     background: linear-gradient(90deg, #28a745, #20c997);
     border-radius: 2px;
     z-index: 1;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 6px rgba(40, 167, 69, 0.3);
+    transform: translateY(-50%);
 }
 
+.parent-level.single-parent::before,
 .parent-level.single::before {
     display: none;
+}
+
+/* Enhanced Connection System for Unlimited Generations */
+.parent-to-children-connector {
+    position: absolute;
+    top: calc(100% + 20px); /* Start below parent cards */
+    left: 50%;
+    width: 4px;
+    height: 40px; /* Length of vertical connector */
+    background: linear-gradient(to bottom, #007bff, #0056b3);
+    transform: translateX(-50%);
+    border-radius: 2px;
+    z-index: 2;
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.3);
+}
+
+.children-connector-area {
+    position: absolute;
+    top: calc(100% + 60px); /* Position below vertical connector */
+    left: 0;
+    right: 0;
+    height: 40px;
+    z-index: 1;
+}
+
+.horizontal-connector {
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 4px;
+    background: linear-gradient(90deg, #007bff, #0056b3);
+    border-radius: 2px;
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.3);
+}
+
+.children-connector-area.single-child .horizontal-connector {
+    display: none; /* No horizontal line for single children */
+}
+
+.child-connector {
+    position: absolute;
+    top: 0;
+    width: 4px;
+    height: 40px;
+    background: #007bff;
+    transform: translateX(-50%);
+    border-radius: 2px;
+    z-index: 2;
+    box-shadow: 0 2px 6px rgba(0, 123, 255, 0.3);
 }
 
 /* Children Level */
@@ -124,21 +202,23 @@
     display: none;
 }
 
-/* Member Card Styling */
+/* Enhanced Member Card - Optimized for dynamic trees */
 .member-card {
     background: white;
     border: 3px solid #007bff;
-    border-radius: 15px;
-    padding: 20px;
-    min-width: 200px;
-    max-width: 250px;
+    border-radius: 18px;
+    padding: 22px;
+    min-width: 220px;
+    max-width: 280px;
     text-align: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.12);
     position: relative;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 10;
     overflow: hidden;
+    /* Ensure cards maintain their shape */
+    flex-shrink: 0;
 }
 
 .member-card::before {
@@ -147,39 +227,40 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
+    height: 5px;
     background: linear-gradient(90deg, #007bff, #28a745);
     z-index: -1;
 }
 
 .member-card:hover {
-    transform: translateY(-5px) scale(1.02);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 12px 35px rgba(0,0,0,0.25);
     border-color: #28a745;
 }
 
 .member-card::after {
     content: '👁';
     position: absolute;
-    top: 10px;
-    right: 15px;
-    font-size: 16px;
+    top: 12px;
+    right: 18px;
+    font-size: 18px;
     opacity: 0;
     transition: opacity 0.3s ease;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     border-radius: 50%;
-    width: 30px;
-    height: 30px;
+    width: 35px;
+    height: 35px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 3px 12px rgba(0,0,0,0.15);
 }
 
 .member-card:hover::after {
     opacity: 1;
 }
 
+/* Gender-based styling - Enhanced */
 .member-card.male {
     border-color: #007bff;
     background: linear-gradient(135deg, #e3f2fd, #ffffff);
@@ -207,69 +288,84 @@
     background: linear-gradient(90deg, #9c27b0, #7b1fa2);
 }
 
-/* Deceased members styling */
+/* Deceased members styling - Enhanced */
 .member-card.deceased {
-    opacity: 0.85;
+    opacity: 0.80;
     border-style: dashed;
+    border-width: 2px;
 }
 
 .member-card.deceased::after {
     content: '†';
     position: absolute;
-    top: 5px;
-    right: 10px;
-    font-size: 20px;
+    top: 8px;
+    right: 12px;
+    font-size: 24px;
     color: #666;
     font-weight: bold;
+    background: none;
+    width: auto;
+    height: auto;
+    opacity: 1;
 }
 
+/* Member card content - Enhanced */
 .member-name {
-    font-weight: bold;
-    font-size: 16px;
-    margin-bottom: 8px;
+    font-weight: 700;
+    font-size: 17px;
+    margin-bottom: 10px;
     color: #333;
     line-height: 1.3;
+    word-wrap: break-word;
 }
 
 .member-dates {
-    font-size: 13px;
+    font-size: 14px;
     color: #666;
-    margin-bottom: 5px;
+    margin-bottom: 8px;
+    font-weight: 500;
 }
 
 .member-info {
-    margin-top: 10px;
+    margin-top: 12px;
 }
 
 .member-info p {
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     color: #555;
-    font-size: 12px;
+    font-size: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
+    gap: 8px;
+    line-height: 1.4;
 }
 
 .member-info i {
     color: #007bff;
-    font-size: 11px;
-    width: 15px;
+    font-size: 12px;
+    width: 16px;
+    flex-shrink: 0;
 }
 
-/* Photo styling */
+/* Enhanced Photo styling */
 .member-photo {
-    width: 80px;
-    height: 80px;
+    width: 90px;
+    height: 90px;
     border-radius: 50%;
     overflow: hidden;
-    margin: 0 auto 15px;
+    margin: 0 auto 18px;
     background: #f8f9fa;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 3px solid #fff;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border: 4px solid #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: transform 0.3s ease;
+}
+
+.member-card:hover .member-photo {
+    transform: scale(1.05);
 }
 
 .member-photo img {
@@ -279,8 +375,13 @@
 }
 
 .default-photo {
-    font-size: 2rem;
+    font-size: 2.5rem;
     color: #ccc;
+    transition: color 0.3s ease;
+}
+
+.member-card:hover .default-photo {
+    color: #007bff;
 }
 
 /* Form Styling */
@@ -541,102 +642,135 @@
     transform: translateY(-50%);
 }
 
-/* Tree Controls */
+/* Enhanced Tree Controls - Better positioning and styling */
 .tree-controls {
-    position: absolute;
-    top: 20px;
-    right: 20px;
+    position: fixed;
+    top: 120px;
+    right: 30px;
     display: flex;
-    gap: 10px;
-    z-index: 100;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 1000;
+    /* Make it semi-transparent when not in use */
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.tree-controls:hover {
+    opacity: 1;
 }
 
 .tree-controls button {
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     border: 2px solid #007bff;
     border-radius: 50%;
-    width: 45px;
-    height: 45px;
+    width: 50px;
+    height: 50px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     color: #007bff;
-    font-size: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    font-size: 18px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    backdrop-filter: blur(10px);
 }
 
 .tree-controls button:hover {
     background: #007bff;
     color: white;
     transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.3);
 }
 
 .tree-controls button:active {
     transform: scale(0.95);
 }
 
-/* Generation Labels */
-.generation-label {
-    position: absolute;
-    left: -60px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(0, 123, 255, 0.1);
-    color: #007bff;
-    padding: 8px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: bold;
-    white-space: nowrap;
-    border: 1px solid rgba(0, 123, 255, 0.3);
+.tree-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
-/* Responsive Design */
+/* Responsive Design - Enhanced for unlimited generations */
+@media (max-width: 1400px) {
+    .generation-level {
+        gap: 60px;
+    }
+    
+    .member-card {
+        min-width: 200px;
+        max-width: 240px;
+        padding: 18px;
+    }
+    
+    .family-unit {
+        margin: 0 25px;
+    }
+}
+
 @media (max-width: 1200px) {
     .generation-level {
-        gap: 40px;
+        gap: 50px;
+        margin: 50px 0;
     }
     
     .member-card {
         min-width: 180px;
-        max-width: 200px;
-        padding: 15px;
+        max-width: 220px;
+        padding: 16px;
     }
     
-    .children-level {
-        gap: 30px;
+    .family-unit {
+        margin: 0 20px;
+        min-width: 250px;
+    }
+    
+    .generation-label {
+        left: -70px;
+        padding: 8px 14px;
+        font-size: 12px;
     }
 }
 
 @media (max-width: 768px) {
     .family-tree-container {
         padding: 20px 10px;
+        /* Enable horizontal scrolling for mobile */
+        overflow-x: auto;
+        overflow-y: auto;
+    }
+    
+    .family-tree {
+        min-width: 800px; /* Ensure minimum width for tree structure */
     }
     
     .generation-level {
-        gap: 20px;
-        margin: 30px 0;
+        gap: 30px;
+        margin: 40px 0;
+        min-height: 180px;
     }
     
     .parent-level {
-        gap: 5px;
-        margin-bottom: 40px;
+        gap: 10px;
+        margin-bottom: 60px;
+        flex-wrap: nowrap; /* Prevent wrapping on mobile */
     }
     
     .member-card {
-        min-width: 150px;
-        max-width: 170px;
-        padding: 12px;
+        min-width: 160px;
+        max-width: 180px;
+        padding: 14px;
     }
     
     .member-name {
-        font-size: 14px;
+        font-size: 15px;
     }
     
     .member-dates {
-        font-size: 11px;
+        font-size: 12px;
     }
     
     .member-info p {
@@ -644,12 +778,12 @@
     }
     
     .member-photo {
-        width: 60px;
-        height: 60px;
+        width: 70px;
+        height: 70px;
     }
     
     .generation-label {
-        display: none;
+        display: none; /* Hide labels on mobile to save space */
     }
     
     .tree-controls {
@@ -657,5 +791,44 @@
         bottom: 20px;
         right: 20px;
         top: auto;
+        flex-direction: row;
+        gap: 10px;
+    }
+    
+    .tree-controls button {
+        width: 45px;
+        height: 45px;
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .family-tree {
+        min-width: 600px; /* Reduce minimum width for very small screens */
+    }
+    
+    .generation-level {
+        gap: 25px;
+    }
+    
+    .member-card {
+        min-width: 140px;
+        max-width: 160px;
+        padding: 12px;
+    }
+    
+    .member-photo {
+        width: 60px;
+        height: 60px;
+    }
+    
+    .member-name {
+        font-size: 14px;
+    }
+    
+    .parent-level.married-couple::before,
+    .marriage-line {
+        left: calc(50% - 90px);
+        right: calc(50% - 90px);
     }
 }

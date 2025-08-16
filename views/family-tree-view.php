@@ -8,24 +8,62 @@ defined('BASEPATH') or exit('No direct script access allowed');
         <i class="fas fa-tree"></i> Family Tree Manager
     </h1>
     
-    <!-- Statistics Panel -->
-    <div class="stats-panel text-center">
+    <!-- Enhanced Statistics Panel with Tree Controls -->
+    <div class="stats-panel text-center mb-4">
         <div class="row">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <h4><?php echo count($family_data['members']); ?></h4>
                 <small>Total Members</small>
             </div>
-            <div class="col-md-3">
-                <h4><?php echo count(array_filter($family_data['members'], function($m) { return $m['gender'] == 'M'; })); ?></h4>
+            <div class="col-md-2">
+                <h4><?php echo count(array_filter($family_data['members'], function($m) { return strtoupper($m['gender'] ?? '') == 'M'; })); ?></h4>
                 <small>Males</small>
             </div>
-            <div class="col-md-3">
-                <h4><?php echo count(array_filter($family_data['members'], function($m) { return $m['gender'] == 'F'; })); ?></h4>
+            <div class="col-md-2">
+                <h4><?php echo count(array_filter($family_data['members'], function($m) { return strtoupper($m['gender'] ?? '') == 'F'; })); ?></h4>
                 <small>Females</small>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <h4><?php echo count($family_data['relationships']) / 2; ?></h4>
                 <small>Relationships</small>
+            </div>
+            <div class="col-md-2">
+                <h4><?php echo count(array_filter($family_data['members'], function($m) { return empty($m['date_of_death']) && ($m['is_living'] ?? true); })); ?></h4>
+                <small>Living</small>
+            </div>
+            <div class="col-md-2">
+                <h4 id="generation-count">-</h4>
+                <small>Generations</small>
+            </div>
+        </div>
+        
+        <!-- Tree Navigation Controls -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="btn-group" role="group" aria-label="Tree Controls">
+                    <button type="button" class="btn btn-light btn-sm" onclick="FamilyTreeNav.autoFitTree()" title="Fit tree to screen">
+                        <i class="fas fa-compress-arrows-alt"></i> Fit to Screen
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm" onclick="FamilyTreeNav.centerTree()" title="Center tree">
+                        <i class="fas fa-crosshairs"></i> Center
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm" onclick="FamilyTreeNav.resetZoom()" title="Reset zoom">
+                        <i class="fas fa-expand-arrows-alt"></i> Reset Zoom
+                    </button>
+                    <button type="button" class="btn btn-light btn-sm" onclick="toggleFullscreen()" title="Toggle fullscreen">
+                        <i class="fas fa-expand"></i> Fullscreen
+                    </button>
+                </div>
+                
+                <!-- Quick Search -->
+                <div class="d-inline-block ms-3">
+                    <div class="input-group input-group-sm">
+                        <input type="text" class="form-control" id="member-search" placeholder="Search member..." style="width: 200px;">
+                        <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -202,8 +240,18 @@ defined('BASEPATH') or exit('No direct script access allowed');
         </div>
     </div>
     
-    <!-- Family Tree Visualization -->
+    <!-- Enhanced Family Tree Visualization -->
     <div class="tree-container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3><i class="fas fa-sitemap"></i> Family Tree Visualization</h3>
+            <div class="text-muted">
+                <small>
+                    <i class="fas fa-info-circle"></i> 
+                    Use Ctrl+Scroll to zoom, drag to pan, click members for details
+                </small>
+            </div>
+        </div>
+        
         <div class="family-tree">
             <?php 
             if(function_exists('renderFamilyTree')) {
@@ -310,6 +358,187 @@ document.addEventListener('DOMContentLoaded', function() {
      }
  }
 });
+
+    // Fullscreen toggle functionality
+    function toggleFullscreen() {
+        const treeContainer = document.querySelector('.tree-container');
+        
+        if (!document.fullscreenElement) {
+            treeContainer.requestFullscreen().then(() => {
+                treeContainer.classList.add('fullscreen-mode');
+                document.querySelector('button[onclick="toggleFullscreen()"] i').className = 'fas fa-compress';
+            }).catch(err => {
+                console.log('Error entering fullscreen:', err);
+            });
+        } else {
+            document.exitFullscreen().then(() => {
+                treeContainer.classList.remove('fullscreen-mode');
+                document.querySelector('button[onclick="toggleFullscreen()"] i').className = 'fas fa-expand';
+            });
+        }
+    }
+    
+    // Clear search functionality
+    function clearSearch() {
+        const searchInput = document.getElementById('member-search');
+        if (searchInput) {
+            searchInput.value = '';
+            // Remove any search highlights
+            document.querySelectorAll('.member-card.search-highlight').forEach(card => {
+                card.classList.remove('search-highlight');
+            });
+        }
+    }
+    
+    // Count and display generation information
+    function updateGenerationCount() {
+        const generations = document.querySelectorAll('.generation-level');
+        const generationCount = generations.length;
+        const countElement = document.getElementById('generation-count');
+        if (countElement) {
+            countElement.textContent = generationCount;
+        }
+        
+        // Add generation info to each level
+        generations.forEach((level, index) => {
+            const label = level.querySelector('.generation-label');
+            if (label) {
+                label.setAttribute('title', `Generation ${index + 1} of ${generationCount}`);
+            }
+        });
+    }
+    
+    // Initialize enhanced features
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(() => {
+            updateGenerationCount();
+        }, 1000); // Allow tree to render first
+        
+        // Enhanced search functionality
+        const searchInput = document.getElementById('member-search');
+        if (searchInput) {
+            let searchTimeout;
+            searchInput.addEventListener('input', function(e) {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    const searchTerm = e.target.value.trim();
+                    
+                    // Clear previous highlights
+                    document.querySelectorAll('.member-card.search-highlight').forEach(card => {
+                        card.classList.remove('search-highlight');
+                    });
+                    
+                    if (searchTerm.length > 1) {
+                        const matches = window.FamilyTreeNav ? window.FamilyTreeNav.findMemberByName(searchTerm) : [];
+                        matches.forEach(card => {
+                            card.classList.add('search-highlight');
+                        });
+                        
+                        // If only one match, scroll to it
+                        if (matches.length === 1) {
+                            const memberId = matches[0].dataset.memberId;
+                            if (window.FamilyTreeNav) {
+                                window.FamilyTreeNav.smoothScrollToMember(memberId);
+                            }
+                        }
+                    }
+                }, 300);
+            });
+        }
+        
+        // Handle fullscreen changes
+        document.addEventListener('fullscreenchange', function() {
+            const treeContainer = document.querySelector('.tree-container');
+            const button = document.querySelector('button[onclick="toggleFullscreen()"] i');
+            
+            if (document.fullscreenElement) {
+                treeContainer.classList.add('fullscreen-mode');
+                if (button) button.className = 'fas fa-compress';
+            } else {
+                treeContainer.classList.remove('fullscreen-mode');
+                if (button) button.className = 'fas fa-expand';
+            }
+        });
+    });
 </script>
+
+<style>
+/* Additional styles for enhanced features */
+.tree-container.fullscreen-mode {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: white;
+    padding: 20px;
+}
+
+.tree-container.fullscreen-mode .family-tree-container {
+    height: calc(100vh - 100px);
+}
+
+.member-card.search-highlight {
+    border-color: #ffc107 !important;
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.5) !important;
+    animation: searchPulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes searchPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.02); }
+}
+
+.stats-panel .btn-group .btn {
+    margin: 0 2px;
+}
+
+.stats-panel .input-group {
+    max-width: 250px;
+    margin: 0 auto;
+}
+
+/* Tree container improvements */
+.tree-container {
+    background: white;
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+.tree-container h3 {
+    color: #007bff;
+    font-weight: 600;
+    margin-bottom: 0;
+}
+
+.tree-container .text-muted {
+    font-size: 0.85rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .stats-panel .btn-group {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .stats-panel .btn {
+        margin-bottom: 5px;
+        font-size: 0.8rem;
+    }
+    
+    .tree-container h3 {
+        font-size: 1.3rem;
+    }
+    
+    .stats-panel .input-group {
+        margin-top: 10px;
+    }
+}
+</style>
+
 <!-- Add family tree specific JavaScript -->
 <script src="assets/js/family-tree.js"></script>

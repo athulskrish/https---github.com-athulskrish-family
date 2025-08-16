@@ -116,7 +116,7 @@ function get_relationship_type($relationship_id) {
     return isset($types[$relationship_id]) ? $types[$relationship_id] : 'Unknown';
 }
 
-// Improved family tree rendering function
+// Dynamic multi-generation family tree rendering function
 function renderFamilyTree($family_data) {
     $output = '<div class="family-tree-container">';
     
@@ -125,19 +125,19 @@ function renderFamilyTree($family_data) {
         return $output . '</div>';
     }
     
-    // Build better relationships map
+    // Build comprehensive relationships map
     $relationships_map = buildRelationshipsMap($family_data);
     
-    // Find root generation (those without living parents in the tree)
-    $root_members = findRootGeneration($family_data['members'], $relationships_map);
+    // Calculate generational structure
+    $generational_tree = buildGenerationalStructure($family_data['members'], $relationships_map);
     
-    if (empty($root_members)) {
-        // If no clear root, just show all members
+    if (empty($generational_tree)) {
+        // If no clear structure, show all members
         $output .= '<div class="alert alert-warning">Complex family structure detected. Showing all members:</div>';
         $output .= renderSimpleList($family_data['members']);
     } else {
         $output .= '<div class="family-tree">';
-    $output .= renderGenerationLevel($root_members, $family_data, $relationships_map, 0, []);
+        $output .= renderMultiGenerationalTree($generational_tree, $family_data, $relationships_map);
         $output .= '</div>';
     }
     
@@ -146,6 +146,7 @@ function renderFamilyTree($family_data) {
         <button onclick="zoomTree(1.1)" title="Zoom In"><i class="fas fa-search-plus"></i></button>
         <button onclick="zoomTree(0.9)" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
         <button onclick="resetZoom()" title="Reset Zoom"><i class="fas fa-expand-arrows-alt"></i></button>
+        <button onclick="autoFitTree()" title="Fit to Screen"><i class="fas fa-compress-arrows-alt"></i></button>
     </div>';
     
     $output .= '</div>';
@@ -182,6 +183,251 @@ function buildRelationshipsMap($family_data) {
     }
     
     return $map;
+}
+
+// Build generational structure for unlimited generations
+function buildGenerationalStructure($members, $relationships_map) {
+    $generations = [];
+    $member_generations = [];
+    $processed = [];
+    
+    // Find all root members (those without parents)
+    $roots = findRootGeneration($members, $relationships_map);
+    
+    if (empty($roots)) {
+        return null; // Can't build structure
+    }
+    
+    // Assign generation 0 to roots
+    foreach ($roots as $root) {
+        $member_generations[$root['id']] = 0;
+        $generations[0][] = $root;
+        $processed[$root['id']] = true;
+    }
+    
+    // Process each generation level
+    $current_generation = 0;
+    $max_iterations = 20; // Safety limit
+    $iterations = 0;
+    
+    while ($iterations < $max_iterations) {
+        $iterations++;
+        $found_children = false;
+        
+        // Find children of current generation
+        if (isset($generations[$current_generation])) {
+            foreach ($generations[$current_generation] as $parent) {
+                $children = findChildren($parent['id'], $members, $relationships_map);
+                
+                foreach ($children as $child) {
+                    if (!isset($processed[$child['id']])) {
+                        $child_generation = $current_generation + 1;
+                        $member_generations[$child['id']] = $child_generation;
+                        $generations[$child_generation][] = $child;
+                        $processed[$child['id']] = true;
+                        $found_children = true;
+                    }
+                }
+            }
+        }
+        
+        if (!$found_children) {
+            break; // No more children found
+        }
+        
+        $current_generation++;
+    }
+    
+    return $generations;
+}
+
+// Render the complete multi-generational tree
+function renderMultiGenerationalTree($generational_tree, $family_data, $relationships_map) {
+    $output = '';
+    
+    foreach ($generational_tree as $generation_level => $members) {
+        $output .= renderDynamicGenerationLevel($members, $family_data, $relationships_map, $generation_level);
+    }
+    
+    return $output;
+}
+
+// Render a generation level dynamically
+function renderDynamicGenerationLevel($members, $family_data, $relationships_map, $level) {
+    if (empty($members)) {
+        return '';
+    }
+    
+    $generation_names = [
+        0 => 'Founders',
+        1 => '1st Generation',
+        2 => '2nd Generation', 
+        3 => '3rd Generation',
+        4 => '4th Generation',
+        5 => '5th Generation'
+    ];
+    
+    // Generate dynamic names for higher generations
+    if ($level > 5) {
+        $generation_names[$level] = $level . 'th Generation';
+    }
+    
+    $output = '<div class="generation-level" data-level="' . $level . '">';
+    
+    // Add generation label
+    $generation_name = $generation_names[$level] ?? 'Generation ' . $level;
+    $output .= '<div class="generation-label">' . $generation_name . '</div>';
+    
+    // Group members into family units (married couples and singles)
+    $family_units = buildFamilyUnits($members, $relationships_map);
+    
+    foreach ($family_units as $unit) {
+        $output .= renderDynamicFamilyUnit($unit, $family_data, $relationships_map, $level);
+    }
+    
+    $output .= '</div>';
+    
+    return $output;
+}
+
+// Build family units with spouses grouped together
+function buildFamilyUnits($members, $relationships_map) {
+    $units = [];
+    $processed = [];
+    
+    foreach ($members as $member) {
+        if (in_array($member['id'], $processed)) {
+            continue;
+        }
+        
+        $unit = [
+            'parents' => [$member],
+            'children' => [],
+            'unit_id' => 'unit_' . $member['id']
+        ];
+        $processed[] = $member['id'];
+        
+        // Find all spouses
+        $spouses = findSpouses($member['id'], $members, $relationships_map);
+        foreach ($spouses as $spouse) {
+            if (!in_array($spouse['id'], $processed)) {
+                $unit['parents'][] = $spouse;
+                $processed[] = $spouse['id'];
+            }
+        }
+        
+        // Find all children of this unit
+        foreach ($unit['parents'] as $parent) {
+            $children = findChildren($parent['id'], $members, $relationships_map);
+            foreach ($children as $child) {
+                // Avoid duplicates
+                $child_exists = false;
+                foreach ($unit['children'] as $existing_child) {
+                    if ($existing_child['id'] == $child['id']) {
+                        $child_exists = true;
+                        break;
+                    }
+                }
+                if (!$child_exists) {
+                    $unit['children'][] = $child;
+                }
+            }
+        }
+        
+        $units[] = $unit;
+    }
+    
+    return $units;
+}
+
+// Find all spouses of a person
+function findSpouses($person_id, $all_members, $relationships_map) {
+    $spouses = [];
+    
+    if (!isset($relationships_map[$person_id])) {
+        return $spouses;
+    }
+    
+    foreach ($relationships_map[$person_id] as $rel) {
+        if (in_array($rel['type'], ['husband', 'wife', 'spouse', 'partner'])) {
+            $spouse = findMemberById($all_members, $rel['member_id']);
+            if ($spouse) {
+                $spouses[] = $spouse;
+            }
+        }
+    }
+    
+    return $spouses;
+}
+
+// Render a dynamic family unit
+function renderDynamicFamilyUnit($unit, $family_data, $relationships_map, $level) {
+    $output = '<div class="family-unit" data-unit="' . $unit['unit_id'] . '">';
+    
+    // Render parents/spouses
+    $parent_count = count($unit['parents']);
+    $parent_class = $parent_count > 1 ? 'married-couple' : 'single-parent';
+    
+    $output .= '<div class="parent-level ' . $parent_class . '">';
+    
+    foreach ($unit['parents'] as $index => $parent) {
+        $output .= renderMemberCard($parent);
+        
+        // Add marriage connection line for couples
+        if ($parent_count > 1 && $index == 0) {
+            $marriage_info = findMarriageInfo($unit['parents'][0]['id'], $unit['parents'][1]['id'], $relationships_map);
+            $marriage_tooltip = '';
+            if ($marriage_info) {
+                $marriage_tooltip = 'title="Married: ' . 
+                    ($marriage_info['marriage_date'] ? date('Y', strtotime($marriage_info['marriage_date'])) : 'Unknown') . 
+                    ($marriage_info['marriage_place'] ? ' in ' . $marriage_info['marriage_place'] : '') . '"';
+            }
+            $output .= '<div class="marriage-line" ' . $marriage_tooltip . '></div>';
+        }
+    }
+    
+    $output .= '</div>';
+    
+    // Add connection line to children if they exist
+    if (!empty($unit['children'])) {
+        $output .= '<div class="parent-to-children-connector"></div>';
+        
+        // Render children connection area
+        $child_count = count($unit['children']);
+        $children_class = $child_count == 1 ? 'single-child' : 'multiple-children';
+        
+        $output .= '<div class="children-connector-area ' . $children_class . '">';
+        $output .= '<div class="horizontal-connector"></div>';
+        
+        // Individual child connectors
+        foreach ($unit['children'] as $index => $child) {
+            $left_position = ($index / max(1, $child_count - 1)) * 100;
+            if ($child_count == 1) $left_position = 50;
+            
+            $output .= '<div class="child-connector" style="left: ' . $left_position . '%;"></div>';
+        }
+        
+        $output .= '</div>';
+    }
+    
+    $output .= '</div>';
+    
+    return $output;
+}
+
+// Find marriage information between two people
+function findMarriageInfo($person1_id, $person2_id, $relationships_map) {
+    if (isset($relationships_map[$person1_id])) {
+        foreach ($relationships_map[$person1_id] as $rel) {
+            if ($rel['member_id'] == $person2_id && in_array($rel['type'], ['husband', 'wife', 'spouse'])) {
+                return [
+                    'marriage_date' => $rel['marriage_date'] ?? null,
+                    'marriage_place' => $rel['marriage_place'] ?? null
+                ];
+            }
+        }
+    }
+    return null;
 }
 
 // Find the root generation (oldest living generation or those without parents)
@@ -221,38 +467,6 @@ function findRootGeneration($members, $relationships_map) {
     }
 
     return $potential_roots;
-}
-
-// Render a generation level with all family units
-function renderGenerationLevel($members, $family_data, $relationships_map, $level, $suppress_parent_ids = []) {
-    if (empty($members)) {
-        return '';
-    }
-    
-    $generation_names = [
-        0 => 'Root Generation',
-        1 => 'Children',
-        2 => 'Grandchildren',
-        3 => 'Great-Grandchildren',
-        4 => 'Great-Great-Grandchildren'
-    ];
-    
-    $output = '<div class="generation-level" data-level="' . $level . '">';
-    
-    if (isset($generation_names[$level])) {
-        $output .= '<div class="generation-label">' . $generation_names[$level] . '</div>';
-    }
-    
-    // Group members into family units (couples and their children)
-    $family_units = groupIntoFamilyUnits($members, $relationships_map);
-    
-    foreach ($family_units as $unit) {
-        $output .= renderFamilyUnit($unit, $family_data, $relationships_map, $level, $suppress_parent_ids);
-    }
-    
-    $output .= '</div>';
-    
-    return $output;
 }
 
 // Group members into family units (couples + singles)
@@ -467,4 +681,170 @@ function findMemberById($members, $id) {
         }
     }
     return null;
+}
+
+// Enhanced function to detect and handle complex family structures
+function detectComplexStructures($members, $relationships_map) {
+    $issues = [];
+    
+    // Check for multiple marriages
+    foreach ($relationships_map as $person_id => $relationships) {
+        $spouse_count = 0;
+        foreach ($relationships as $rel) {
+            if (in_array($rel['type'], ['husband', 'wife', 'spouse'])) {
+                $spouse_count++;
+            }
+        }
+        if ($spouse_count > 1) {
+            $member = findMemberById($members, $person_id);
+            $issues[] = [
+                'type' => 'multiple_marriages',
+                'member' => $member,
+                'count' => $spouse_count
+            ];
+        }
+    }
+    
+    // Check for potential cycles in family tree
+    $visited = [];
+    foreach ($members as $member) {
+        if (!isset($visited[$member['id']])) {
+            if (detectCycle($member['id'], $relationships_map, $visited, [])) {
+                $issues[] = [
+                    'type' => 'circular_reference',
+                    'member' => $member
+                ];
+            }
+        }
+    }
+    
+    return $issues;
+}
+
+// Detect circular references in family relationships
+function detectCycle($person_id, $relationships_map, &$visited, $path) {
+    if (in_array($person_id, $path)) {
+        return true; // Cycle detected
+    }
+    
+    if (isset($visited[$person_id])) {
+        return false; // Already processed
+    }
+    
+    $visited[$person_id] = true;
+    $path[] = $person_id;
+    
+    if (isset($relationships_map[$person_id])) {
+        foreach ($relationships_map[$person_id] as $rel) {
+            if (in_array($rel['type'], ['father', 'mother', 'parent'])) {
+                if (detectCycle($rel['member_id'], $relationships_map, $visited, $path)) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    array_pop($path);
+    return false;
+}
+
+// Generate tree statistics
+function generateTreeStatistics($family_data) {
+    $stats = [
+        'total_members' => count($family_data['members']),
+        'total_relationships' => count($family_data['relationships']) / 2, // Divide by 2 for bidirectional
+        'generations' => 0,
+        'living_members' => 0,
+        'deceased_members' => 0,
+        'males' => 0,
+        'females' => 0,
+        'others' => 0,
+        'marriages' => 0,
+        'average_children_per_family' => 0
+    ];
+    
+    foreach ($family_data['members'] as $member) {
+        // Count by living status
+        if (empty($member['date_of_death']) && ($member['is_living'] ?? true)) {
+            $stats['living_members']++;
+        } else {
+            $stats['deceased_members']++;
+        }
+        
+        // Count by gender
+        switch (strtoupper($member['gender'] ?? '')) {
+            case 'M':
+                $stats['males']++;
+                break;
+            case 'F':
+                $stats['females']++;
+                break;
+            default:
+                $stats['others']++;
+                break;
+        }
+    }
+    
+    // Count marriages
+    foreach ($family_data['relationships'] as $rel) {
+        if (in_array($rel['relationship_subtype'], ['husband', 'wife', 'spouse'])) {
+            $stats['marriages']++;
+        }
+    }
+    $stats['marriages'] = $stats['marriages'] / 2; // Divide by 2 for bidirectional
+    
+    return $stats;
+}
+
+// Export tree data as JSON for external use
+function exportTreeAsJSON($family_data) {
+    return json_encode([
+        'version' => '2.0',
+        'exported_at' => date('Y-m-d H:i:s'),
+        'members' => $family_data['members'],
+        'relationships' => $family_data['relationships'],
+        'statistics' => generateTreeStatistics($family_data)
+    ], JSON_PRETTY_PRINT);
+}
+
+// Search members by various criteria
+function searchMembers($family_data, $criteria) {
+    $results = [];
+    
+    foreach ($family_data['members'] as $member) {
+        $match = true;
+        
+        if (isset($criteria['name']) && !empty($criteria['name'])) {
+            $full_name = trim($member['first_name'] . ' ' . ($member['middle_name'] ?? '') . ' ' . $member['last_name']);
+            if (stripos($full_name, $criteria['name']) === false) {
+                $match = false;
+            }
+        }
+        
+        if (isset($criteria['gender']) && !empty($criteria['gender'])) {
+            if (strtoupper($member['gender']) !== strtoupper($criteria['gender'])) {
+                $match = false;
+            }
+        }
+        
+        if (isset($criteria['birth_year']) && !empty($criteria['birth_year'])) {
+            if (empty($member['date_of_birth']) || 
+                date('Y', strtotime($member['date_of_birth'])) != $criteria['birth_year']) {
+                $match = false;
+            }
+        }
+        
+        if (isset($criteria['occupation']) && !empty($criteria['occupation'])) {
+            if (empty($member['occupation']) || 
+                stripos($member['occupation'], $criteria['occupation']) === false) {
+                $match = false;
+            }
+        }
+        
+        if ($match) {
+            $results[] = $member;
+        }
+    }
+    
+    return $results;
 }
