@@ -14,7 +14,7 @@ This is a PHP-based family tree management application that allows users to crea
 ### Key Components
 1. **Database Layer** (`includes/db.php`)
    - Uses MySQL with prepared statements
-   - See `schema.sql` for table structure
+   - See `database.sql` for complete table structure
    - Relationships are stored in `family_relationships` table with types: parent, child, spouse, sibling
 
 2. **Security Layer** (`includes/security.php`, `includes/SecurityMiddleware.php`)
@@ -57,7 +57,7 @@ Key settings in `includes/config.php`:
 - Update BASE_URL constant for deployment
 
 ### Database Setup
-1. Import `schema.sql` for table structure
+1. Import `database.sql` for complete table structure
 2. Configure connection in `includes/config.php`
 3. SSL/TLS settings available for production
 
@@ -74,9 +74,9 @@ Key settings in `includes/config.php`:
 3. Update tree rendering logic if needed
 
 ## Testing
-- Use `test-connection.php` to verify database connectivity
-- `test-form.php` and `test-photo-upload.php` for feature testing
 - Always test rate limiting with multiple rapid requests
+- Test all uploads with various file types
+- Verify CSRF protection on all forms
 
 ## Development Workflow
 1. Local development with error reporting on

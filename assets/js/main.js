@@ -609,9 +609,7 @@ function getMemberById(id) {
 let relationshipCounter = 0;
 
 function addRelationship() {
-    console.log('addRelationship called');
     const container = document.getElementById('relationships-container');
-    console.log('Container:', container);
     
     if (!container) {
         console.error('relationships-container not found');
@@ -622,7 +620,7 @@ function addRelationship() {
     relationshipDiv.className = 'relationship-entry border rounded p-3 mb-2';
     
     const memberOptions = generateMemberOptions();
-    console.log('Generated member options:', memberOptions);
+
     
     relationshipDiv.innerHTML = `
         <div class="row">
@@ -649,7 +647,7 @@ function addRelationship() {
     `;
     container.appendChild(relationshipDiv);
     relationshipCounter++;
-    console.log('Relationship added, counter:', relationshipCounter);
+
 }
 
 function removeRelationship(button) {
@@ -666,18 +664,18 @@ function escapeHtml(value) {
 }
 
 function generateMemberOptions() {
-    console.log('generateMemberOptions called');
-    console.log('window.treeMembers:', window.treeMembers);
+
+
     
     const list = Array.isArray(window.treeMembers) ? window.treeMembers : [];
-    console.log('Processed list:', list);
+
     
     const options = list.map(function(member) {
         const fullName = `${escapeHtml(member.first_name)} ${escapeHtml(member.last_name)}`.trim();
         return `<option value="${member.id}">${fullName}</option>`;
     }).join('');
     
-    console.log('Generated options:', options);
+
     return options;
 }
 

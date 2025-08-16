@@ -83,6 +83,5 @@ try {
     echo "✗ Setup error: " . $e->getMessage() . "<br>";
 }
 
-echo "<br><a href='test-connection.php'>Run Connection Test</a> | ";
-echo "<a href='login.php'>Go to Login</a>";
+echo "<br><a href='login.php'>Go to Login</a>";
 ?>

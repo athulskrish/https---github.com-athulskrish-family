@@ -12,16 +12,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect_to('dashboard.php');
 }
 
-// Add debugging mode flag
-$debug_mode = true;
-
-// Enhanced error logging
-if ($debug_mode) {
-    error_log("Debug Mode: Starting add-member process.");
-    error_log("POST Data: " . print_r($_POST, true));
-    error_log("FILES Data: " . print_r($_FILES, true));
-}
-
 // Check if this is an AJAX request
 $is_ajax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && 
            strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
@@ -235,9 +225,6 @@ if ($action === 'add_member') {
 
         // Log SQL query execution
         if ($debug_mode) {
-            error_log("Executing SQL query to insert person.");
-            error_log("SQL: " . $sql);
-            error_log("SQL Parameters: " . print_r($params, true));
         }
 
         $stmt->execute($params);

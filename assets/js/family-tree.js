@@ -160,10 +160,10 @@ function findMemberByName(searchTerm) {
         const memberId = matches[0].dataset.memberId;
         smoothScrollToMember(memberId);
     } else if (matches.length > 1) {
-        console.log(`Found ${matches.length} members matching "${searchTerm}"`);
+
         // Could implement a selection dialog here
     } else {
-        console.log(`No members found matching "${searchTerm}"`);
+
     }
     
     return matches;
@@ -485,4 +485,4 @@ window.FamilyTreeNav = {
     navigateTree
 };
 
-console.log('Enhanced Family Tree Navigation loaded successfully');
+
