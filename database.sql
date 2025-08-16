@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS relationships (
     id INT PRIMARY KEY AUTO_INCREMENT,
     person1_id INT NOT NULL,
     person2_id INT NOT NULL,
-    relationship_type ENUM('parent-child', 'spouse', 'sibling') NOT NULL,
+    relationship_type VARCHAR(50),
     relationship_subtype VARCHAR(50),
     marriage_date DATE,
     marriage_place VARCHAR(255),
