@@ -352,6 +352,86 @@
     }
 }
 
+/* Relationship editing buttons */
+.relationship-item {
+    transition: all 0.3s ease;
+}
+
+.relationship-item:hover {
+    background-color: #f8f9fa;
+}
+
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.btn-outline-primary {
+    border-color: #007bff;
+    color: #007bff;
+}
+
+.btn-outline-primary:hover {
+    background-color: #007bff;
+    color: white;
+}
+
+.btn-outline-danger {
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Modal enhancements */
+.modal-content {
+    border: none;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-bottom: none;
+}
+
+.modal-title {
+    font-weight: 300;
+}
+
+.btn-close {
+    filter: invert(1);
+}
+
+.form-select:focus,
+.form-control:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+}
+
+/* Relationship list improvements */
+.list-group-item {
+    border-left: 4px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.list-group-item:hover {
+    border-left-color: #667eea;
+    transform: translateX(5px);
+}
+
+.relationship-actions {
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.list-group-item:hover .relationship-actions {
+    opacity: 1;
+}
+
 /* Back Button */
 .btn-outline-primary {
     border-radius: 25px;
