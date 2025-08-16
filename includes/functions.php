@@ -137,7 +137,7 @@ function renderFamilyTree($family_data) {
         $output .= renderSimpleList($family_data['members']);
     } else {
         $output .= '<div class="family-tree">';
-        $output .= renderGenerationLevel($root_members, $family_data, $relationships_map, 0);
+    $output .= renderGenerationLevel($root_members, $family_data, $relationships_map, 0, []);
         $output .= '</div>';
     }
     
@@ -224,7 +224,7 @@ function findRootGeneration($members, $relationships_map) {
 }
 
 // Render a generation level with all family units
-function renderGenerationLevel($members, $family_data, $relationships_map, $level) {
+function renderGenerationLevel($members, $family_data, $relationships_map, $level, $suppress_parent_ids = []) {
     if (empty($members)) {
         return '';
     }
@@ -247,7 +247,7 @@ function renderGenerationLevel($members, $family_data, $relationships_map, $leve
     $family_units = groupIntoFamilyUnits($members, $relationships_map);
     
     foreach ($family_units as $unit) {
-        $output .= renderFamilyUnit($unit, $family_data, $relationships_map, $level);
+        $output .= renderFamilyUnit($unit, $family_data, $relationships_map, $level, $suppress_parent_ids);
     }
     
     $output .= '</div>';
@@ -289,7 +289,7 @@ function groupIntoFamilyUnits($members, $relationships_map) {
 }
 
 // Render a single family unit
-function renderFamilyUnit($unit, $family_data, $relationships_map, $level) {
+function renderFamilyUnit($unit, $family_data, $relationships_map, $level, $suppress_parent_ids = []) {
     $output = '<div class="family-unit">';
     
     // Render parents
@@ -297,7 +297,13 @@ function renderFamilyUnit($unit, $family_data, $relationships_map, $level) {
     $parent_class = $parent_count > 1 ? '' : 'single';
     
     $output .= '<div class="parent-level ' . $parent_class . '">';
+    $multiple_parents = count($unit['parents']) > 1;
     foreach ($unit['parents'] as $parent) {
+        // Suppress if this parent was just rendered as a child in the previous generation
+        $suppress = in_array($parent['id'], $suppress_parent_ids);
+        if ($suppress) {
+            continue; // Avoid re-rendering the child when they appear as a parent in the next generation with a spouse
+        }
         $output .= renderMemberCard($parent);
     }
     $output .= '</div>';
@@ -336,15 +342,13 @@ function renderFamilyUnit($unit, $family_data, $relationships_map, $level) {
             $output .= '<div class="child-wrapper" style="position: relative;">';
             $output .= '<div class="child-connection" style="left: 50%; transform: translateX(-50%);"></div>';
             $output .= renderMemberCard($child);
+            // Render this child's descendants inline (spouse + children) without reprinting the child card again
+            // Pass suppress_parent_ids to avoid duplicating the child when rendering their unit
+            $output .= renderGenerationLevel([$child], $family_data, $relationships_map, $level + 1, [$child['id']]);
             $output .= '</div>';
         }
         
         $output .= '</div>';
-        
-        // Recursively render next generation
-        if ($level < 4) { // Limit depth to prevent infinite recursion
-            $output .= renderGenerationLevel($unique_children, $family_data, $relationships_map, $level + 1);
-        }
     }
     
     $output .= '</div>';
