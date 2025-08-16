@@ -3,6 +3,70 @@ require_once 'includes/config.php';
 require_once 'includes/db.php';
 require_once 'includes/functions.php';
 require_once 'includes/auth.php';
+// Relationship mapping helpers
+require_once 'includes/FamilyRelationships.php';
+
+// Local helper to update an existing relationship (mirrors manage-relationships.php)
+function updateExistingRelationship($conn, $data) {
+    $relationship_id = isset($data['relationship_id']) ? (int)$data['relationship_id'] : 0;
+    $marriage_date = !empty($data['marriage_date']) ? $data['marriage_date'] : null;
+    $marriage_place = !empty($data['marriage_place']) ? $data['marriage_place'] : null;
+    $divorce_date = !empty($data['divorce_date']) ? $data['divorce_date'] : null;
+
+    if (!$relationship_id) {
+        throw new Exception("Relationship ID is required.");
+    }
+
+    $stmt = $conn->prepare("
+        UPDATE relationships 
+        SET marriage_date = ?, marriage_place = ?, divorce_date = ?
+        WHERE id = ?
+    ");
+    $stmt->execute([$marriage_date, $marriage_place, $divorce_date, $relationship_id]);
+
+    if ($stmt->rowCount() === 0) {
+        // No changes or not found, still treat as success silently
+        return;
+    }
+}
+
+// Add a relationship between two family members (mirrors logic in family-tree.php)
+function addRelationship($data, $conn) {
+    // Determine relationship category from subtype
+    $relationship_category = FamilyRelationships::getRelationshipCategory($data['relationship_subtype']);
+
+    $stmt = $conn->prepare("INSERT INTO relationships (
+        person1_id, person2_id, relationship_type, relationship_subtype,
+        marriage_date, marriage_place
+    ) VALUES (?, ?, ?, ?, ?, ?)");
+
+    // Normalize optional fields
+    $marriage_date = !empty($data['marriage_date']) ? $data['marriage_date'] : null;
+    $marriage_place = !empty($data['marriage_place']) ? $data['marriage_place'] : null;
+
+    $stmt->execute([
+        $data['person1_id'],
+        $data['person2_id'],
+        $relationship_category,
+        $data['relationship_subtype'],
+        $marriage_date,
+        $marriage_place
+    ]);
+
+    // Add reciprocal relationship if defined
+    $reciprocal = FamilyRelationships::getReciprocalRelationship($data['relationship_subtype']);
+    if ($reciprocal) {
+        $reciprocal_category = FamilyRelationships::getRelationshipCategory($reciprocal);
+        $stmt->execute([
+            $data['person2_id'],
+            $data['person1_id'],
+            $reciprocal_category,
+            $reciprocal,
+            $marriage_date,
+            $marriage_place
+        ]);
+    }
+}
 
 // Check if user is logged in
 redirect_if_not_logged_in();
@@ -17,6 +81,35 @@ if (!$member_id) {
 
 $db = new Database();
 $conn = $db->getConnection();
+
+// Handle relationship operations (inline processing for add/update)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    try {
+        // Validate CSRF token
+        if (!isset($_POST['csrf_token']) || !verify_csrf_token($_POST['csrf_token']) ) {
+            throw new Exception('Invalid CSRF token');
+        }
+
+        if ($_POST['action'] === 'add_relationship') {
+            // Expect: person1_id (current), person2_id, relationship_subtype, optional marriage_* fields
+            addRelationship($_POST, $conn);
+
+            $_SESSION['flash_message'] = 'Relationship added successfully!';
+            $_SESSION['flash_type'] = 'success';
+            redirect_to('member.php?id=' . $member_id);
+        } elseif ($_POST['action'] === 'update_relationship') {
+            updateExistingRelationship($conn, $_POST);
+
+            $_SESSION['flash_message'] = 'Relationship updated successfully!';
+            $_SESSION['flash_type'] = 'success';
+            redirect_to('member.php?id=' . $member_id);
+        }
+    } catch (Exception $e) {
+        $_SESSION['flash_message'] = 'Error: ' . $e->getMessage();
+        $_SESSION['flash_type'] = 'danger';
+        // fall through to render page with message
+    }
+}
 
 // Get member details with tree access check
 $stmt = $conn->prepare("
@@ -315,6 +408,147 @@ include 'templates/header.php';
                 </div>
             </div>
         </div>
+
+        <?php if (in_array($member['access_level'], ['owner', 'admin', 'edit'])): ?>
+        <!-- Inline Relationship Management -->
+        <div class="col-12">
+            <!-- Add Relationship Form -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3 class="mb-0">Add Relationship</h3>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="member.php?id=<?php echo $member_id; ?>">
+                        <input type="hidden" name="action" value="add_relationship">
+                        <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                        <input type="hidden" name="person1_id" value="<?php echo $member_id; ?>">
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="inline_person2_id" class="form-label">Related Person</label>
+                                    <select class="form-select" id="inline_person2_id" name="person2_id" required>
+                                        <option value="">Select Person</option>
+                                        <?php
+                                        // Get all people in the same tree except current one
+                                        $stmt = $conn->prepare("SELECT id, first_name, last_name FROM people WHERE tree_id = ? AND id != ? ORDER BY first_name, last_name");
+                                        $stmt->execute([$member['tree_id'], $member_id]);
+                                        while ($person = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                                            echo '<option value="' . (int)$person['id'] . '">' .
+                                                 htmlspecialchars($person['first_name'] . ' ' . $person['last_name']) .
+                                                 '</option>';
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="inline_relationship_subtype" class="form-label">Relationship Type</label>
+                                    <select class="form-select" id="inline_relationship_subtype" name="relationship_subtype" required>
+                                        <option value="">Select Relationship</option>
+                                        <optgroup label="Family">
+                                            <option value="father">Father</option>
+                                            <option value="mother">Mother</option>
+                                            <option value="son">Son</option>
+                                            <option value="daughter">Daughter</option>
+                                            <option value="brother">Brother</option>
+                                            <option value="sister">Sister</option>
+                                        </optgroup>
+                                        <optgroup label="Spouse">
+                                            <option value="husband">Husband</option>
+                                            <option value="wife">Wife</option>
+                                        </optgroup>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row g-3 mt-1" id="inline-marriage-fields" style="display:none;">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="inline_marriage_date" class="form-label">Marriage Date</label>
+                                    <input type="date" class="form-control" id="inline_marriage_date" name="marriage_date">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="inline_marriage_place" class="form-label">Marriage Place</label>
+                                    <input type="text" class="form-control" id="inline_marriage_place" name="marriage_place">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">Add Relationship</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Existing Relationships List with Edit capability -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h3 class="mb-0">Existing Relationships</h3>
+                </div>
+                <div class="card-body">
+                    <?php
+                    // Display existing relationships with edit forms
+                    $stmt = $conn->prepare("
+                        SELECT r.*, 
+                               fm.first_name, fm.last_name
+                        FROM relationships r
+                        JOIN people fm ON 
+                            (r.person1_id = ? AND r.person2_id = fm.id) OR 
+                            (r.person2_id = ? AND r.person1_id = fm.id)
+                        WHERE r.person1_id = ? OR r.person2_id = ?
+                    ");
+                    $stmt->execute([$member_id, $member_id, $member_id, $member_id]);
+                    $relationships_list = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                    
+                    if (empty($relationships_list)) {
+                        echo '<p class="text-muted mb-0">No relationships found.</p>';
+                    } else {
+                        foreach ($relationships_list as $rel_item) {
+                            ?>
+                            <div class="relationship-item mb-3 p-3 border rounded">
+                                <form method="POST" action="member.php?id=<?php echo $member_id; ?>" class="row g-2 align-items-end">
+                                    <input type="hidden" name="action" value="update_relationship">
+                                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
+                                    <input type="hidden" name="relationship_id" value="<?php echo (int)$rel_item['id']; ?>">
+                                    
+                                    <div class="col-md-4">
+                                        <div>
+                                            <strong><?php echo htmlspecialchars($rel_item['first_name'] . ' ' . $rel_item['last_name']); ?></strong>
+                                        </div>
+                                        <small class="text-muted"><?php echo htmlspecialchars($rel_item['relationship_subtype']); ?></small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label form-label-sm">Marriage Date</label>
+                                        <input type="date" class="form-control form-control-sm" 
+                                               name="marriage_date" value="<?php echo htmlspecialchars($rel_item['marriage_date'] ?? ''); ?>"
+                                               placeholder="Marriage Date">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label form-label-sm">Marriage Place</label>
+                                        <input type="text" class="form-control form-control-sm" 
+                                               name="marriage_place" value="<?php echo htmlspecialchars($rel_item['marriage_place'] ?? ''); ?>"
+                                               placeholder="Marriage Place">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="submit" class="btn btn-sm btn-primary w-100">Update</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <?php
+                        }
+                    }
+                    ?>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Media Column -->
         <div class="col-md-4">
@@ -826,6 +1060,26 @@ function viewMedia(mediaId) {
     // Load media details and show in modal
     modal.show();
 }
+</script>
+
+<script>
+// Show/hide marriage fields in inline form based on relationship type
+document.addEventListener('DOMContentLoaded', function() {
+    const subtypeSelect = document.getElementById('inline_relationship_subtype');
+    const marriageFields = document.getElementById('inline-marriage-fields');
+    if (subtypeSelect && marriageFields) {
+        const toggleMarriage = () => {
+            const spouseTypes = ['husband', 'wife', 'partner'];
+            if (spouseTypes.includes(subtypeSelect.value)) {
+                marriageFields.style.display = 'flex';
+            } else {
+                marriageFields.style.display = 'none';
+            }
+        };
+        subtypeSelect.addEventListener('change', toggleMarriage);
+        toggleMarriage();
+    }
+});
 </script>
 
 <?php include 'templates/footer.php'; ?>
