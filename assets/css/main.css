@@ -1,0 +1,74 @@
+.family-tree-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    overflow-x: auto;
+}
+
+.family-member {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 10px;
+    position: relative;
+}
+
+.member-card {
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    min-width: 150px;
+    transition: transform 0.2s;
+}
+
+.member-card:hover {
+    transform: scale(1.05);
+    border-color: #007bff;
+}
+
+.member-photo {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 10px;
+}
+
+.children-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    position: relative;
+}
+
+/* Tree connecting lines */
+.family-member::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    width: 2px;
+    height: 10px;
+    background: #ddd;
+    transform: translateX(-50%);
+}
+
+.children-container::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #ddd;
+}
+
+.level-0::before {
+    display: none; /* No line above root members */
+}
