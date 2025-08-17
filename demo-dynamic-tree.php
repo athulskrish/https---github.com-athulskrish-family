@@ -866,6 +866,9 @@
 					<button onclick="autoFitTreeHierarchical()" title="Fit to Screen">
 						<i class="fas fa-compress-arrows-alt"></i>
 					</button>
+					<button onclick="initializeConnectionLines()" title="Refresh Connections" style="background: linear-gradient(145deg, #e74c3c, #c0392b); border-color: #e74c3c;">
+						<i class="fas fa-project-diagram"></i>
+					</button>
 				</div>
 			</div>
 		</div>
@@ -923,7 +926,30 @@
 
 	// Initialize tree interactions
 	document.addEventListener('DOMContentLoaded', function() {
+		console.log('DOM Content Loaded - Starting family tree initialization');
+		
+		// Log DOM structure for debugging
 		const container = document.querySelector('.hierarchical-tree-container');
+		const generations = document.querySelectorAll('.generation-row');
+		const connectors = document.querySelectorAll('.parent-child-connectors');
+		const familyCards = document.querySelectorAll('.enhanced-member-card');
+		
+		console.log('DOM Elements Found:');
+		console.log('- Container:', container ? 'Found' : 'Missing');
+		console.log('- Generations:', generations.length);
+		console.log('- Connector containers:', connectors.length);
+		console.log('- Family cards:', familyCards.length);
+		
+		// Log each generation and its members
+		generations.forEach((gen, index) => {
+			const cards = gen.querySelectorAll('.enhanced-member-card');
+			console.log(`Generation ${index}:`, cards.length, 'members');
+			cards.forEach(card => {
+				const id = card.dataset.memberId;
+				const name = card.querySelector('.member-name')?.textContent || 'Unknown';
+				console.log(`  - ID: ${id}, Name: ${name}`);
+			});
+		});
 		
 		if (container) {
 			// Initialize connection lines
@@ -978,15 +1004,33 @@
 			});
 		});
 		
-		// Auto-fit on load and initialize connections
+		// Auto-fit on load and initialize connections with multiple attempts
 		setTimeout(() => {
 			autoFitTreeHierarchical();
-			// Recalculate connections after layout is complete
-			setTimeout(() => {
-				initializeConnectionLines();
-				console.log('Family tree connections initialized');
-			}, 200);
-		}, 500);
+			// Multiple attempts to ensure layout is complete
+			let attempts = 0;
+			const maxAttempts = 3;
+			
+			function tryInitializeConnections() {
+				attempts++;
+				console.log(`Attempting to initialize connections (attempt ${attempts}/${maxAttempts})`);
+				
+				const connectionsContainer = document.querySelector('.parent-child-connectors');
+				const familyCards = document.querySelectorAll('.enhanced-member-card');
+				
+				if (connectionsContainer && familyCards.length > 0) {
+					initializeConnectionLines();
+					console.log('Family tree connections initialized successfully');
+				} else if (attempts < maxAttempts) {
+					console.log('DOM not ready, retrying in 500ms...');
+					setTimeout(tryInitializeConnections, 500);
+				} else {
+					console.log('Failed to initialize connections after maximum attempts');
+				}
+			}
+			
+			setTimeout(tryInitializeConnections, 300);
+		}, 800);
 	});
 
 	// Initialize and position connection lines dynamically
@@ -1005,14 +1049,43 @@
 		const familyData = <?php echo json_encode($family_data); ?>;
 		const relationships = familyData.relationships || [];
 		
-		console.log('Family data:', familyData);
-		console.log('Found', relationships.length, 'relationships');
+		console.log('Family data received by JavaScript:', familyData);
+		console.log('Relationships received:', relationships.length);
+		console.log('First 5 relationships:', relationships.slice(0, 5));
+		
+		// Verify specific relationships we expect
+		const testRelationships = [
+			{ parent: 1, child: 3, type: 'father' },  // Rajendra -> Sheeja
+			{ parent: 3, child: 6, type: 'mother' },  // Sheeja -> Athul
+			{ parent: 3, child: 7, type: 'mother' },  // Sheeja -> Amal
+		];
+		
+		testRelationships.forEach(test => {
+			// Check both directions: Parent->Child and Child->Parent
+			const found = relationships.find(rel => {
+				// Direction 1: Parent -> Child (father, mother, parent)
+				const parentToChild = rel.person1_id == test.parent && 
+				                     rel.person2_id == test.child && 
+				                     rel.relationship_subtype === test.type;
+				
+				// Direction 2: Child -> Parent (son, daughter, child)  
+				const childToParent = rel.person1_id == test.child && 
+				                     rel.person2_id == test.parent && 
+				                     ['son', 'daughter', 'child'].includes(rel.relationship_subtype);
+				
+				return parentToChild || childToParent;
+			});
+			console.log(`Test relationship ${test.parent}<->${test.child} (${test.type}):`, found ? '✅ Found' : '❌ Missing');
+		});
 		
 		let connectionsCreated = 0;
 		
 		generations.forEach((generation, levelIndex) => {
 			const nextGeneration = generations[levelIndex + 1];
-			if (!nextGeneration) return;
+			if (!nextGeneration) {
+				console.log(`No next generation found for level ${levelIndex}`);
+				return;
+			}
 			
 			console.log(`Processing generation ${levelIndex} to ${levelIndex + 1}`);
 			
@@ -1020,68 +1093,119 @@
 			const childUnits = nextGeneration.querySelectorAll('.family-unit-inline');
 			const connectorContainer = generation.nextElementSibling;
 			
-			if (!connectorContainer || !connectorContainer.classList.contains('parent-child-connectors')) {
-				console.log('No connector container found for level', levelIndex);
+			console.log(`Found ${parentUnits.length} parent units and ${childUnits.length} child units`);
+			
+			if (!connectorContainer) {
+				console.log('❌ No connector container (nextElementSibling) found for level', levelIndex);
 				return;
 			}
+			
+			if (!connectorContainer.classList.contains('parent-child-connectors')) {
+				console.log('❌ Next element is not a parent-child-connectors:', connectorContainer.className);
+				return;
+			}
+			
+			console.log('✅ Connector container found:', connectorContainer);
 			
 			// Clear existing connection lines
 			connectorContainer.innerHTML = '';
 			
 			// Calculate positions and create connection lines
 			parentUnits.forEach((parentUnit, parentIndex) => {
-				const hasChildren = parentUnit.classList.contains('has-children');
-				if (!hasChildren) return;
-				
-				console.log(`Processing parent unit ${parentIndex}`);
-				
-				const parentRect = parentUnit.getBoundingClientRect();
-				const containerRect = container.getBoundingClientRect();
-				const connectorRect = connectorContainer.getBoundingClientRect();
-				
-				// Calculate parent position relative to connector container
-				const parentLeft = parentRect.left - connectorRect.left + (parentRect.width / 2);
+				console.log(`\n--- Processing parent unit ${parentIndex} ---`);
 				
 				// Get parent member IDs from this unit
 				const parentCards = parentUnit.querySelectorAll('.enhanced-member-card');
-				const parentIds = Array.from(parentCards).map(card => parseInt(card.dataset.memberId));
+				const parentIds = Array.from(parentCards).map(card => {
+					const id = parseInt(card.dataset.memberId);
+					const name = card.querySelector('.member-name')?.textContent || 'Unknown';
+					console.log(`Parent in unit: ID=${id}, Name=${name}`);
+					return id;
+				});
 				
-				console.log('Parent IDs:', parentIds);
+				console.log('All parent IDs in unit:', parentIds);
 				
 				// Find child units that have members who are children of these parents
 				const childPositions = [];
+				const childRelationships = []; // Track which children belong to which parents
+				
 				childUnits.forEach((childUnit, childIndex) => {
+					console.log(`  Checking child unit ${childIndex}:`);
 					const childCards = childUnit.querySelectorAll('.enhanced-member-card');
 					let belongsToParent = false;
+					let childDetails = [];
 					
 					childCards.forEach(childCard => {
 						const childId = parseInt(childCard.dataset.memberId);
+						const childName = childCard.querySelector('.member-name')?.textContent || 'Unknown';
+						console.log(`    Child: ID=${childId}, Name=${childName}`);
 						
 						// Check if any parent in this unit is a parent of this child
 						parentIds.forEach(parentId => {
-							const parentChildRel = relationships.find(rel => 
-								rel.person1_id === parentId && 
-								rel.person2_id === childId && 
-								['father', 'mother', 'parent'].includes(rel.relationship_subtype)
-							);
+							console.log(`      Checking relationship ${parentId} -> ${childId}`);
+							
+							// Check both directions: Parent->Child and Child->Parent
+							const parentChildRel = relationships.find(rel => {
+								// Direction 1: Parent -> Child (father, mother, parent)
+								const parentToChild = rel.person1_id == parentId && 
+								                     rel.person2_id == childId && 
+								                     ['father', 'mother', 'parent'].includes(rel.relationship_subtype);
+								
+								// Direction 2: Child -> Parent (son, daughter, child)
+								const childToParent = rel.person1_id == childId && 
+								                     rel.person2_id == parentId && 
+								                     ['son', 'daughter', 'child'].includes(rel.relationship_subtype);
+								
+								const matches = parentToChild || childToParent;
+								
+								if (matches) {
+									console.log(`      ✅ FOUND MATCH: ${parentId} <-> ${childId} (${rel.relationship_subtype}) [${parentToChild ? 'Parent->Child' : 'Child->Parent'}]`);
+								}
+								return matches;
+							});
 							
 							if (parentChildRel) {
 								belongsToParent = true;
-								console.log(`Found relationship: ${parentId} -> ${childId} (${parentChildRel.relationship_subtype})`);
+								childDetails.push({
+									childId: childId,
+									childName: childName,
+									parentId: parentId,
+									relationship: parentChildRel.relationship_subtype
+								});
+								console.log(`      ✅ Relationship confirmed: ${parentId} <-> ${childId} (${parentChildRel.relationship_subtype}) - ${childName}`);
 							}
 						});
 					});
 					
 					if (belongsToParent) {
+						console.log(`    ✅ Child unit ${childIndex} belongs to parent unit ${parentIndex}`);
 						const childRect = childUnit.getBoundingClientRect();
+						const connectorRect = connectorContainer.getBoundingClientRect();
 						const childLeft = childRect.left - connectorRect.left + (childRect.width / 2);
-						childPositions.push({ index: childIndex, left: childLeft });
+						childPositions.push({ 
+							index: childIndex, 
+							left: childLeft,
+							details: childDetails
+						});
+						console.log(`    Position calculated: ${childLeft}px`);
+					} else {
+						console.log(`    ❌ Child unit ${childIndex} does not belong to parent unit ${parentIndex}`);
 					}
 				});
 				
-				console.log('Child positions found:', childPositions.length);
+				console.log(`Final result: Found ${childPositions.length} child positions for parent unit ${parentIndex}`);
 				
-				if (childPositions.length === 0) return;
+				if (childPositions.length === 0) {
+					console.log(`❌ No children found for parent unit ${parentIndex}, skipping...`);
+					return;
+				}
+				
+				// Get parent position
+				const parentRect = parentUnit.getBoundingClientRect();
+				const connectorRect = connectorContainer.getBoundingClientRect();
+				const parentLeft = parentRect.left - connectorRect.left + (parentRect.width / 2);
+				
+				console.log(`Creating connection from parent at ${parentLeft}px to ${childPositions.length} children`);
 				
 				// Create connection line structure
 				const connectionLine = document.createElement('div');
@@ -1098,10 +1222,10 @@
 				parentDrop.style.top = '0px';
 				parentDrop.style.width = '6px';
 				parentDrop.style.height = '25px';
-				parentDrop.style.background = 'linear-gradient(to bottom, #3498db, #2980b9)';
+				parentDrop.style.background = 'linear-gradient(to bottom, #e74c3c, #c0392b)'; // Make it red for visibility
 				parentDrop.style.borderRadius = '3px';
-				parentDrop.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
-				parentDrop.style.zIndex = '13';
+				parentDrop.style.boxShadow = '0 3px 12px rgba(231, 76, 60, 0.6), 0 0 20px rgba(231, 76, 60, 0.3)';
+				parentDrop.style.zIndex = '15';
 				
 				connectionLine.appendChild(parentDrop);
 				
@@ -1116,10 +1240,10 @@
 					distributionLine.style.top = '25px';
 					distributionLine.style.width = (maxChildLeft - minChildLeft + 6) + 'px';
 					distributionLine.style.height = '6px';
-					distributionLine.style.background = 'linear-gradient(90deg, #3498db, #2980b9)';
+					distributionLine.style.background = 'linear-gradient(90deg, #e74c3c, #c0392b)';
 					distributionLine.style.borderRadius = '3px';
-					distributionLine.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
-					distributionLine.style.zIndex = '12';
+					distributionLine.style.boxShadow = '0 3px 12px rgba(231, 76, 60, 0.6), 0 0 20px rgba(231, 76, 60, 0.3)';
+					distributionLine.style.zIndex = '14';
 					
 					connectionLine.appendChild(distributionLine);
 				}
@@ -1132,37 +1256,149 @@
 					childConnect.style.top = '25px';
 					childConnect.style.width = '6px';
 					childConnect.style.height = '55px';
-					childConnect.style.background = 'linear-gradient(to bottom, #3498db, #2980b9)';
+					childConnect.style.background = 'linear-gradient(to bottom, #e74c3c, #c0392b)';
 					childConnect.style.borderRadius = '3px';
-					childConnect.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
-					childConnect.style.zIndex = '13';
+					childConnect.style.boxShadow = '0 3px 12px rgba(231, 76, 60, 0.6), 0 0 20px rgba(231, 76, 60, 0.3)';
+					childConnect.style.zIndex = '15';
 					
 					connectionLine.appendChild(childConnect);
 				});
 				
-				// Single child connection (direct line)
-				if (childPositions.length === 1) {
-					const childLeft = childPositions[0].left;
-					const singleConnect = document.createElement('div');
-					singleConnect.style.position = 'absolute';
-					singleConnect.style.left = childLeft - 3 + 'px';
-					singleConnect.style.top = '25px';
-					singleConnect.style.width = '6px';
-					singleConnect.style.height = '55px';
-					singleConnect.style.background = 'linear-gradient(to bottom, #3498db, #2980b9)';
-					singleConnect.style.borderRadius = '3px';
-					singleConnect.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
-					singleConnect.style.zIndex = '13';
-					
-					connectionLine.appendChild(singleConnect);
-				}
-				
 				connectorContainer.appendChild(connectionLine);
 				connectionsCreated++;
+				
+				console.log(`Created connection ${connectionsCreated} for parent unit ${parentIndex}`);
 			});
 		});
 		
 		console.log(`Connection line initialization complete. Created ${connectionsCreated} connections.`);
+		
+		// Add a visual indicator that connections are being processed
+		if (connectionsCreated > 0) {
+			console.log('✅ Connections successfully created!');
+			
+			// Add a success message to the page
+			const successMsg = document.createElement('div');
+			successMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #27ae60; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; font-weight: bold;';
+			successMsg.textContent = `✅ ${connectionsCreated} family connections created!`;
+			document.body.appendChild(successMsg);
+			setTimeout(() => successMsg.remove(), 3000);
+		} else {
+			console.log('❌ No connections were created. Check relationship data.');
+			
+			// Add a simple test connection to verify DOM manipulation works
+			console.log('🔧 Adding test connection to verify DOM access...');
+			const firstConnector = document.querySelector('.parent-child-connectors');
+			if (firstConnector) {
+				const testLine = document.createElement('div');
+				testLine.style.cssText = `
+					position: absolute;
+					top: 10px;
+					left: 50%;
+					width: 8px;
+					height: 60px;
+					background: linear-gradient(to bottom, #ff0000, #cc0000);
+					border-radius: 4px;
+					box-shadow: 0 0 15px rgba(255, 0, 0, 0.8);
+					z-index: 20;
+					transform: translateX(-50%);
+				`;
+				firstConnector.appendChild(testLine);
+				console.log('✅ Test line added successfully - DOM manipulation works!');
+				
+				// Add an info message
+				const infoMsg = document.createElement('div');
+				infoMsg.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #f39c12; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; font-weight: bold;';
+				infoMsg.textContent = '🔧 Test connection added - check console for details';
+				document.body.appendChild(infoMsg);
+				setTimeout(() => infoMsg.remove(), 5000);
+			} else {
+				console.log('❌ No connector containers found - DOM structure issue');
+			}
+			
+			// Add an error message to the page
+			const errorMsg = document.createElement('div');
+			errorMsg.style.cssText = 'position: fixed; top: 70px; right: 20px; background: #e74c3c; color: white; padding: 10px 20px; border-radius: 5px; z-index: 1000; font-weight: bold;';
+			errorMsg.textContent = '❌ No family connections found!';
+			document.body.appendChild(errorMsg);
+			setTimeout(() => errorMsg.remove(), 5000);
+		}
+	}
+
+	// Debug function to test connection logic
+	window.debugConnections = function() {
+		console.log('=== DEBUG CONNECTION LOGIC ===');
+		const familyData = <?php echo json_encode($family_data); ?>;
+		const relationships = familyData.relationships || [];
+		
+		console.log('All relationships:', relationships);
+		
+		// Test each generation pair
+		const generations = document.querySelectorAll('.generation-row');
+		generations.forEach((gen, index) => {
+			const nextGen = generations[index + 1];
+			if (nextGen) {
+				console.log(`\nGeneration ${index} -> ${index + 1}:`);
+				const parentCards = gen.querySelectorAll('.enhanced-member-card');
+				const childCards = nextGen.querySelectorAll('.enhanced-member-card');
+				
+				parentCards.forEach(parentCard => {
+					const parentId = parseInt(parentCard.dataset.memberId);
+					const parentName = parentCard.querySelector('.member-name').textContent;
+					console.log(`  Parent: ${parentId} - ${parentName}`);
+					
+					childCards.forEach(childCard => {
+						const childId = parseInt(childCard.dataset.memberId);
+						const childName = childCard.querySelector('.member-name').textContent;
+						
+						const rel = relationships.find(r => 
+							r.person1_id === parentId && 
+							r.person2_id === childId && 
+							['father', 'mother', 'parent'].includes(r.relationship_subtype)
+						);
+						
+						if (rel) {
+							console.log(`    -> Child: ${childId} - ${childName} (${rel.relationship_subtype})`);
+						}
+					});
+				});
+			}
+		});
+		
+		// Now run the actual connection function
+		initializeConnectionLines();
+	}
+
+	// Simple test function to create basic connections
+	window.createTestConnection = function() {
+		console.log('Creating test connection...');
+		const connectors = document.querySelectorAll('.parent-child-connectors');
+		console.log('Found', connectors.length, 'connector containers');
+		
+		connectors.forEach((connector, index) => {
+			// Clear existing content
+			connector.innerHTML = '';
+			
+			// Add a simple red line
+			const testLine = document.createElement('div');
+			testLine.style.cssText = `
+				position: absolute;
+				top: 0;
+				left: 50%;
+				width: 6px;
+				height: 80px;
+				background: linear-gradient(to bottom, #e74c3c, #c0392b);
+				border-radius: 3px;
+				box-shadow: 0 0 15px rgba(231, 76, 60, 0.8);
+				z-index: 20;
+				transform: translateX(-50%);
+			`;
+			
+			connector.appendChild(testLine);
+			console.log(`Added test line to connector ${index}`);
+		});
+		
+		return connectors.length;
 	}
 
 	// Keyboard shortcuts
