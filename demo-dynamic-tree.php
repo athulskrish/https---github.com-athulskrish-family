@@ -566,8 +566,20 @@
 			// Group members by family units (spouses together)
 			$family_units = groupMembersIntoFamilyUnits($members, $relationships_map);
 			
-			foreach ($family_units as $unit) {
-				$output .= '<div class="family-unit-inline">';
+			foreach ($family_units as $unitIndex => $unit) {
+				// Find children of this family unit for connection tracking
+				$children_in_next_gen = [];
+				if (isset($generations[$level + 1])) {
+					foreach ($unit['members'] as $parent) {
+						$parent_children = findChildrens($parent['id'], $generations[$level + 1], $relationships_map);
+						$children_in_next_gen = array_merge($children_in_next_gen, $parent_children);
+					}
+				}
+				
+				$has_children = !empty($children_in_next_gen);
+				$unit_class = $has_children ? 'has-children' : '';
+				
+				$output .= '<div class="family-unit-inline ' . $unit_class . '" data-unit="' . $level . '-' . $unitIndex . '">';
 				
 				// Render all members in this unit (spouses together)
 				foreach ($unit['members'] as $index => $member) {
@@ -579,17 +591,91 @@
 					}
 				}
 				
+				// Add connection point for children if this unit has children
+				if ($has_children) {
+					$child_names = array_map(function($child) { return $child['first_name']; }, $children_in_next_gen);
+					$output .= '<div class="parent-connection-point" data-children-count="' . count($children_in_next_gen) . '" title="Children: ' . implode(', ', $child_names) . '"></div>';
+				}
+				
 				$output .= '</div>';
 			}
 			
 			$output .= '</div>';
 			
-			// Add connecting lines to next generation (parent-child connectors)
+			// Add connecting lines to next generation with specific parent-child mapping
 			if (isset($generations[$level + 1])) {
-				$output .= '<div class="generation-connector"></div>';
+				$output .= renderParentChildConnectors($generations[$level], $generations[$level + 1], $relationships_map, $level);
 			}
 		}
 		
+		return $output;
+	}
+
+	// Render specific parent-child connecting lines
+	function renderParentChildConnectors($parent_generation, $child_generation, $relationships_map, $level) {
+		$output = '<div class="parent-child-connectors" data-from-level="' . $level . '">';
+		
+		// Group parents by family units
+		$parent_units = groupMembersIntoFamilyUnits($parent_generation, $relationships_map);
+		$child_units = groupMembersIntoFamilyUnits($child_generation, $relationships_map);
+		
+		$connector_lines = [];
+		$unit_index = 0;
+		
+		foreach ($parent_units as $parent_unit) {
+			$parent_children = [];
+			
+			// Find all children of this parent unit
+			foreach ($parent_unit['members'] as $parent) {
+				$children = findChildrens($parent['id'], $child_generation, $relationships_map);
+				foreach ($children as $child) {
+					if (!in_array($child['id'], array_column($parent_children, 'id'))) {
+						$parent_children[] = $child;
+					}
+				}
+			}
+			
+			if (!empty($parent_children)) {
+				// Create connector line from this parent unit to its children
+				$child_positions = [];
+				$child_unit_index = 0;
+				
+				foreach ($child_units as $child_unit) {
+					foreach ($child_unit['members'] as $child) {
+						if (in_array($child['id'], array_column($parent_children, 'id'))) {
+							$child_positions[] = $child_unit_index;
+						}
+					}
+					$child_unit_index++;
+				}
+				
+				if (!empty($child_positions)) {
+					$output .= '<div class="family-connection-line" ';
+					$output .= 'data-parent-unit="' . $unit_index . '" ';
+					$output .= 'data-child-units="' . implode(',', array_unique($child_positions)) . '" ';
+					$output .= 'data-children-count="' . count($parent_children) . '">';
+					
+					// Vertical drop line from parent
+					$output .= '<div class="parent-drop-line"></div>';
+					
+					// Horizontal distribution line
+					if (count(array_unique($child_positions)) > 1) {
+						$output .= '<div class="child-distribution-line"></div>';
+					}
+					
+					// Vertical lines to each child unit
+					foreach (array_unique($child_positions) as $child_pos) {
+						$output .= '<div class="child-connect-line" data-child-position="' . $child_pos . '"></div>';
+					}
+					
+					$output .= '</div>';
+				}
+			}
+			
+			$unit_index++;
+		}
+		
+		$output .= '</div>';
 		return $output;
 	}
 
@@ -730,6 +816,37 @@
 					</div>
 				</div>
 				
+				<!-- Debug: Family data and relationships -->
+				<div class="debug-info" style="background: rgba(0,0,0,0.8); color: white; padding: 20px; margin: 20px 0; border-radius: 10px; font-family: monospace; display: none;" id="debug-panel">
+					<h4>Debug Information</h4>
+					<div class="row">
+						<div class="col-md-6">
+							<h5>Family Members:</h5>
+							<ul style="max-height: 200px; overflow-y: auto;">
+								<?php foreach($family_data['members'] as $member): ?>
+									<li>ID: <?php echo $member['id']; ?> - <?php echo htmlspecialchars($member['first_name'] . ' ' . $member['last_name']); ?> (<?php echo $member['gender']; ?>)</li>
+								<?php endforeach; ?>
+							</ul>
+						</div>
+						<div class="col-md-6">
+							<h5>Relationships:</h5>
+							<ul style="max-height: 200px; overflow-y: auto;">
+								<?php foreach($family_data['relationships'] as $rel): ?>
+									<li>
+										<?php echo $rel['person1_id']; ?> (<?php echo $rel['person1_name'] ?? 'Unknown'; ?>) 
+										→ <?php echo $rel['relationship_subtype']; ?> → 
+										<?php echo $rel['person2_id']; ?> (<?php echo $rel['person2_name'] ?? 'Unknown'; ?>)
+									</li>
+								<?php endforeach; ?>
+							</ul>
+						</div>
+					</div>
+					<button onclick="document.getElementById('debug-panel').style.display='none'" class="btn btn-sm btn-secondary mt-2">Hide Debug</button>
+				</div>
+				
+				<!-- Toggle Debug Button -->
+				<button onclick="document.getElementById('debug-panel').style.display='block'" class="btn btn-outline-info mb-3">Show Debug Info</button>
+				
 				<!-- Tree Container -->
 				<div class="tree-container mb-4">
 					<?php echo renderHierarchicalFamilyTree($family_data); ?>
@@ -766,6 +883,9 @@
 		if (container) {
 			container.style.transform = `scale(${hierarchicalZoom})`;
 			container.style.transformOrigin = 'center top';
+			
+			// Recalculate connection lines after zoom
+			setTimeout(initializeConnectionLines, 100);
 		}
 	}
 
@@ -774,6 +894,8 @@
 		const container = document.querySelector('.hierarchical-tree-container');
 		if (container) {
 			container.style.transform = 'scale(1)';
+			// Recalculate connection lines after reset
+			setTimeout(initializeConnectionLines, 100);
 		}
 	}
 
@@ -793,6 +915,9 @@
 			hierarchicalZoom = Math.min(scaleX, scaleY, 1);
 			container.style.transform = `scale(${hierarchicalZoom})`;
 			container.style.transformOrigin = 'center top';
+			
+			// Recalculate connection lines after auto-fit
+			setTimeout(initializeConnectionLines, 200);
 		}
 	}
 
@@ -801,6 +926,9 @@
 		const container = document.querySelector('.hierarchical-tree-container');
 		
 		if (container) {
+			// Initialize connection lines
+			initializeConnectionLines();
+			
 			// Mouse wheel zoom
 			container.addEventListener('wheel', function(e) {
 				if (e.ctrlKey || e.metaKey) {
@@ -850,9 +978,192 @@
 			});
 		});
 		
-		// Auto-fit on load
-		setTimeout(autoFitTreeHierarchical, 500);
+		// Auto-fit on load and initialize connections
+		setTimeout(() => {
+			autoFitTreeHierarchical();
+			// Recalculate connections after layout is complete
+			setTimeout(() => {
+				initializeConnectionLines();
+				console.log('Family tree connections initialized');
+			}, 200);
+		}, 500);
 	});
+
+	// Initialize and position connection lines dynamically
+	function initializeConnectionLines() {
+		console.log('Starting connection line initialization...');
+		
+		const generations = document.querySelectorAll('.generation-row');
+		const container = document.querySelector('.hierarchical-tree-container');
+		
+		if (!container) {
+			console.log('No container found');
+			return;
+		}
+		
+		// Get relationship data from PHP (passed to JavaScript)
+		const familyData = <?php echo json_encode($family_data); ?>;
+		const relationships = familyData.relationships || [];
+		
+		console.log('Family data:', familyData);
+		console.log('Found', relationships.length, 'relationships');
+		
+		let connectionsCreated = 0;
+		
+		generations.forEach((generation, levelIndex) => {
+			const nextGeneration = generations[levelIndex + 1];
+			if (!nextGeneration) return;
+			
+			console.log(`Processing generation ${levelIndex} to ${levelIndex + 1}`);
+			
+			const parentUnits = generation.querySelectorAll('.family-unit-inline');
+			const childUnits = nextGeneration.querySelectorAll('.family-unit-inline');
+			const connectorContainer = generation.nextElementSibling;
+			
+			if (!connectorContainer || !connectorContainer.classList.contains('parent-child-connectors')) {
+				console.log('No connector container found for level', levelIndex);
+				return;
+			}
+			
+			// Clear existing connection lines
+			connectorContainer.innerHTML = '';
+			
+			// Calculate positions and create connection lines
+			parentUnits.forEach((parentUnit, parentIndex) => {
+				const hasChildren = parentUnit.classList.contains('has-children');
+				if (!hasChildren) return;
+				
+				console.log(`Processing parent unit ${parentIndex}`);
+				
+				const parentRect = parentUnit.getBoundingClientRect();
+				const containerRect = container.getBoundingClientRect();
+				const connectorRect = connectorContainer.getBoundingClientRect();
+				
+				// Calculate parent position relative to connector container
+				const parentLeft = parentRect.left - connectorRect.left + (parentRect.width / 2);
+				
+				// Get parent member IDs from this unit
+				const parentCards = parentUnit.querySelectorAll('.enhanced-member-card');
+				const parentIds = Array.from(parentCards).map(card => parseInt(card.dataset.memberId));
+				
+				console.log('Parent IDs:', parentIds);
+				
+				// Find child units that have members who are children of these parents
+				const childPositions = [];
+				childUnits.forEach((childUnit, childIndex) => {
+					const childCards = childUnit.querySelectorAll('.enhanced-member-card');
+					let belongsToParent = false;
+					
+					childCards.forEach(childCard => {
+						const childId = parseInt(childCard.dataset.memberId);
+						
+						// Check if any parent in this unit is a parent of this child
+						parentIds.forEach(parentId => {
+							const parentChildRel = relationships.find(rel => 
+								rel.person1_id === parentId && 
+								rel.person2_id === childId && 
+								['father', 'mother', 'parent'].includes(rel.relationship_subtype)
+							);
+							
+							if (parentChildRel) {
+								belongsToParent = true;
+								console.log(`Found relationship: ${parentId} -> ${childId} (${parentChildRel.relationship_subtype})`);
+							}
+						});
+					});
+					
+					if (belongsToParent) {
+						const childRect = childUnit.getBoundingClientRect();
+						const childLeft = childRect.left - connectorRect.left + (childRect.width / 2);
+						childPositions.push({ index: childIndex, left: childLeft });
+					}
+				});
+				
+				console.log('Child positions found:', childPositions.length);
+				
+				if (childPositions.length === 0) return;
+				
+				// Create connection line structure
+				const connectionLine = document.createElement('div');
+				connectionLine.className = 'dynamic-family-connection';
+				connectionLine.style.position = 'absolute';
+				connectionLine.style.width = '100%';
+				connectionLine.style.height = '100%';
+				connectionLine.style.pointerEvents = 'none';
+				
+				// Vertical drop from parent
+				const parentDrop = document.createElement('div');
+				parentDrop.style.position = 'absolute';
+				parentDrop.style.left = parentLeft - 3 + 'px';
+				parentDrop.style.top = '0px';
+				parentDrop.style.width = '6px';
+				parentDrop.style.height = '25px';
+				parentDrop.style.background = 'linear-gradient(to bottom, #3498db, #2980b9)';
+				parentDrop.style.borderRadius = '3px';
+				parentDrop.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
+				parentDrop.style.zIndex = '13';
+				
+				connectionLine.appendChild(parentDrop);
+				
+				if (childPositions.length > 1) {
+					// Horizontal distribution line
+					const minChildLeft = Math.min(...childPositions.map(c => c.left));
+					const maxChildLeft = Math.max(...childPositions.map(c => c.left));
+					
+					const distributionLine = document.createElement('div');
+					distributionLine.style.position = 'absolute';
+					distributionLine.style.left = minChildLeft - 3 + 'px';
+					distributionLine.style.top = '25px';
+					distributionLine.style.width = (maxChildLeft - minChildLeft + 6) + 'px';
+					distributionLine.style.height = '6px';
+					distributionLine.style.background = 'linear-gradient(90deg, #3498db, #2980b9)';
+					distributionLine.style.borderRadius = '3px';
+					distributionLine.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
+					distributionLine.style.zIndex = '12';
+					
+					connectionLine.appendChild(distributionLine);
+				}
+				
+				// Vertical lines to each child
+				childPositions.forEach(childPos => {
+					const childConnect = document.createElement('div');
+					childConnect.style.position = 'absolute';
+					childConnect.style.left = childPos.left - 3 + 'px';
+					childConnect.style.top = '25px';
+					childConnect.style.width = '6px';
+					childConnect.style.height = '55px';
+					childConnect.style.background = 'linear-gradient(to bottom, #3498db, #2980b9)';
+					childConnect.style.borderRadius = '3px';
+					childConnect.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
+					childConnect.style.zIndex = '13';
+					
+					connectionLine.appendChild(childConnect);
+				});
+				
+				// Single child connection (direct line)
+				if (childPositions.length === 1) {
+					const childLeft = childPositions[0].left;
+					const singleConnect = document.createElement('div');
+					singleConnect.style.position = 'absolute';
+					singleConnect.style.left = childLeft - 3 + 'px';
+					singleConnect.style.top = '25px';
+					singleConnect.style.width = '6px';
+					singleConnect.style.height = '55px';
+					singleConnect.style.background = 'linear-gradient(to bottom, #3498db, #2980b9)';
+					singleConnect.style.borderRadius = '3px';
+					singleConnect.style.boxShadow = '0 3px 12px rgba(52, 152, 219, 0.6), 0 0 20px rgba(52, 152, 219, 0.3)';
+					singleConnect.style.zIndex = '13';
+					
+					connectionLine.appendChild(singleConnect);
+				}
+				
+				connectorContainer.appendChild(connectionLine);
+				connectionsCreated++;
+			});
+		});
+		
+		console.log(`Connection line initialization complete. Created ${connectionsCreated} connections.`);
+	}
 
 	// Keyboard shortcuts
 	document.addEventListener('keydown', function(e) {

@@ -66,87 +66,266 @@
     text-shadow: 0 0 10px rgba(231, 76, 60, 0.6);
 }
 
-/* Generation connector between rows with parent-child lines */
-.generation-connector {
+/* Dynamic connection lines created by JavaScript */
+.dynamic-family-connection {
+    position: absolute !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    z-index: 10 !important;
+}
+
+.dynamic-family-connection > div {
+    position: absolute;
+    background: linear-gradient(to bottom, #3498db, #2980b9);
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
+    transition: all 0.3s ease;
+}
+
+/* Hover effects for connection lines */
+.family-unit-inline:hover ~ .parent-child-connectors .dynamic-family-connection > div,
+.family-unit-inline:hover .dynamic-family-connection > div {
+    background: linear-gradient(to bottom, #e74c3c, #c0392b);
+    box-shadow: 0 3px 12px rgba(231, 76, 60, 0.5);
+    transform: scale(1.1);
+}
+
+/* Improved responsive styles for connection lines */
+@media (max-width: 1200px) {
+    .parent-child-connectors {
+        height: 70px;
+    }
+    
+    .dynamic-family-connection > div {
+        opacity: 0.9;
+    }
+}
+
+@media (max-width: 768px) {
+    .parent-child-connectors {
+        height: 60px;
+    }
+    
+    .dynamic-family-connection > div {
+        opacity: 0.8;
+    }
+    
+    /* Hide connection lines on mobile for cleaner view */
+    .parent-child-connectors {
+        display: none;
+    }
+}
+
+/* Parent-child connection system */
+.parent-child-connectors {
     width: 100%;
     height: 80px;
     position: relative;
     display: flex;
     justify-content: center;
-    align-items: center;
-    overflow: visible;
+    align-items: flex-start;
     z-index: 1;
+    margin: 0;
+    padding: 0;
 }
 
-/* Horizontal line at top connecting to parents */
-.generation-connector::before {
-    content: '';
+.family-connection-line {
     position: absolute;
-    top: 0;
-    left: 10%;
-    right: 10%;
-    height: 4px;
-    background: linear-gradient(90deg, #3498db, #2980b9);
-    border-radius: 2px;
-    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
 }
 
-/* Vertical lines dropping to children */
-.generation-connector::after {
-    content: '';
+/* Parent connection point on family units - make more visible */
+.parent-connection-point {
     position: absolute;
-    bottom: 0;
-    left: 10%;
-    right: 10%;
-    height: 4px;
-    background: linear-gradient(90deg, #3498db, #2980b9);
-    border-radius: 2px;
-    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
-}
-
-/* Individual parent connection lines */
-.generation-row {
-    position: relative;
-}
-
-/* Add connection lines from each parent to children below */
-.family-unit-inline {
-    position: relative;
-}
-
-/* Vertical line from family unit to children */
-.family-unit-inline::after {
-    content: '';
-    position: absolute;
-    bottom: -40px;
+    bottom: -20px;
     left: 50%;
     transform: translateX(-50%);
+    width: 12px;
+    height: 12px;
+    background: radial-gradient(circle, #3498db, #2980b9);
+    border-radius: 50%;
+    border: 3px solid #ffffff;
+    box-shadow: 0 0 15px rgba(52, 152, 219, 0.8), 0 0 30px rgba(52, 152, 219, 0.4);
+    z-index: 15;
+    cursor: pointer;
+    animation: connectionPulse 2s ease-in-out infinite;
+}
+
+@keyframes connectionPulse {
+    0%, 100% { 
+        transform: translateX(-50%) scale(1);
+        box-shadow: 0 0 15px rgba(52, 152, 219, 0.8), 0 0 30px rgba(52, 152, 219, 0.4);
+    }
+    50% { 
+        transform: translateX(-50%) scale(1.2);
+        box-shadow: 0 0 20px rgba(52, 152, 219, 1), 0 0 40px rgba(52, 152, 219, 0.6);
+    }
+}
+
+.parent-connection-point:hover {
+    background: radial-gradient(circle, #e74c3c, #c0392b);
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.9), 0 0 40px rgba(231, 76, 60, 0.5);
+    animation: none;
+    transform: translateX(-50%) scale(1.3);
+}
+
+/* Vertical drop line from parent */
+.parent-drop-line {
+    position: absolute;
+    top: 0;
     width: 4px;
-    height: 40px;
+    height: 30px;
     background: linear-gradient(to bottom, #3498db, #2980b9);
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
+    z-index: 3;
+}
+
+/* Horizontal distribution line connecting to multiple children */
+.child-distribution-line {
+    position: absolute;
+    top: 30px;
+    height: 4px;
+    background: linear-gradient(90deg, #3498db, #2980b9);
     border-radius: 2px;
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
     z-index: 2;
 }
 
-/* Hide connection line on last generation */
-.generation-row:last-child .family-unit-inline::after {
-    display: none;
+/* Vertical lines dropping to each child */
+.child-connect-line {
+    position: absolute;
+    top: 30px;
+    width: 4px;
+    height: 50px;
+    background: linear-gradient(to bottom, #3498db, #2980b9);
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
+    z-index: 3;
 }
 
-/* Connection point indicator on children */
+/* Family unit positioning for connections */
+.family-unit-inline.has-children {
+    position: relative;
+}
+
+.family-unit-inline.has-children::after {
+    content: '';
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 20px;
+    background: linear-gradient(to bottom, #3498db, #2980b9);
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
+    z-index: 4;
+}
+
+/* Child connection points */
 .generation-row:not(:first-child) .family-unit-inline::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 20px;
+    background: linear-gradient(to bottom, #3498db, #2980b9);
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
+    z-index: 4;
+}
+
+/* Connection indicators on child cards */
+.generation-row:not(:first-child) .enhanced-member-card::after {
     content: '';
     position: absolute;
     top: -40px;
     left: 50%;
     transform: translateX(-50%);
-    width: 4px;
-    height: 40px;
-    background: linear-gradient(to bottom, #3498db, #2980b9);
-    border-radius: 2px;
-    box-shadow: 0 2px 8px rgba(52, 152, 219, 0.4);
-    z-index: 2;
+    width: 6px;
+    height: 6px;
+    background: #3498db;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 8px rgba(52, 152, 219, 0.6);
+    z-index: 5;
+}
+
+/* Override deceased styling to preserve connection indicators */
+.enhanced-member-card.deceased::after {
+    content: '†';
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    font-size: 24px;
+    color: #7f8c8d;
+    font-weight: bold;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+    width: auto;
+    height: auto;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Remove old generic connectors */
+.generation-connector {
+    display: none;
+}
+
+/* Adjust family unit spacing for better connection visibility */
+.family-unit-inline {
+    margin: 20px 0;
+}
+
+/* Dynamic positioning for connection lines using CSS custom properties */
+.family-connection-line[data-parent-unit="0"] .parent-drop-line {
+    left: calc(16.66% - 2px);
+}
+
+.family-connection-line[data-parent-unit="1"] .parent-drop-line {
+    left: calc(50% - 2px);
+}
+
+.family-connection-line[data-parent-unit="2"] .parent-drop-line {
+    left: calc(83.33% - 2px);
+}
+
+/* Multi-child distribution lines */
+.family-connection-line[data-children-count="2"] .child-distribution-line {
+    left: 25%;
+    width: 50%;
+}
+
+.family-connection-line[data-children-count="3"] .child-distribution-line {
+    left: 16.66%;
+    width: 66.66%;
+}
+
+.family-connection-line[data-children-count="4"] .child-distribution-line {
+    left: 12.5%;
+    width: 75%;
+}
+
+/* Child connection line positioning */
+.child-connect-line[data-child-position="0"] {
+    left: calc(16.66% - 2px);
+}
+
+.child-connect-line[data-child-position="1"] {
+    left: calc(50% - 2px);
+}
+
+.child-connect-line[data-child-position="2"] {
+    left: calc(83.33% - 2px);
 }
 
 /* Enhanced member cards with consistent sizing */
